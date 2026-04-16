@@ -10,15 +10,16 @@ import {
   MessageCircle,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
-import { speakText } from '@/lib/speak'
 import Timer, { TimerHandle } from '@/components/Timer'
 import AIChat from '@/components/AIChat'
-import HandsFreeMode from '@/components/HandsFreeMode'
+import { useProtocolSession } from '@/contexts/ProtocolSessionContext'
 import { Protocol, Step } from '@/types'
 
 export default function ProtocolWalkerPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const supabase = createSupabaseBrowserClient()
+  const { setSessionState, setCallbacks, clearSession, notifyTimerComplete } =
+    useProtocolSession()
 
   const [protocol, setProtocol] = useState<Protocol | null>(null)
   const [steps, setSteps] = useState<Step[]>([])
@@ -96,6 +97,28 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
     loadProtocol()
   }, [loadProtocol])
 
+  // ── Register with HandsFreeMode context ──────────────────────────────────
+  // Callbacks use refs internally so they're stable — register once on mount.
+  useEffect(() => {
+    setCallbacks({
+      onNextStep: handleNextStep,
+      onMarkComplete: handleCompleteStep,
+      onStartTimer: () => timerRef.current?.start(),
+      onPauseTimer: () => timerRef.current?.pause(),
+    })
+    return () => clearSession()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Keep context session state in sync with page state
+  useEffect(() => {
+    if (protocol && steps.length) {
+      setSessionState({ protocol, steps, currentStepIndex })
+    }
+  }, [protocol, steps, currentStepIndex, setSessionState])
+
+  // ── Session persistence ───────────────────────────────────────────────────
+
   async function saveSession(completed: number[], currentStepNumber: number) {
     const {
       data: { user },
@@ -134,6 +157,8 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
     setTimeout(() => setSavedIndicator(false), 2000)
   }
 
+  // ── Step actions ──────────────────────────────────────────────────────────
+
   async function handleCompleteStep() {
     const steps = stepsRef.current
     const idx = currentStepIndexRef.current
@@ -161,24 +186,7 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
     if (idx < steps.length - 1) setCurrentStepIndex(idx + 1)
   }
 
-  async function handleAskAI(question: string) {
-    const steps = stepsRef.current
-    const idx = currentStepIndexRef.current
-    const currentStep = steps[idx]
-
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: question,
-        currentStep: currentStep?.title ?? '',
-      }),
-    })
-    const data = await res.json()
-    if (data.reply) await speakText(data.reply)
-  }
-
-  // ─── Loading ────────────────────────────────────────────────────────────────
+  // ── Loading ───────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -195,7 +203,7 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
     )
   }
 
-  // ─── Complete screen ──────────────────────────────────────────────────────
+  // ── Complete screen ───────────────────────────────────────────────────────
   if (protocolComplete) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
@@ -214,7 +222,7 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
     )
   }
 
-  // ─── Walker ───────────────────────────────────────────────────────────────
+  // ── Walker ────────────────────────────────────────────────────────────────
   const currentStep = steps[currentStepIndex]
   const alreadyCompleted = completedSteps.includes(currentStep.step_number)
   const hasTimer = !!currentStep.timer_seconds
@@ -274,18 +282,6 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
 
       {/* ── Main area ─────────────────────────────────────────────────────── */}
       <div className="flex flex-1 flex-col gap-5 overflow-y-auto">
-        {/* Hands-free mode — top of main area */}
-        <HandsFreeMode
-          currentStepTitle={currentStep.title}
-          protocolName={protocol.name}
-          protocolId={params.id}
-          onNextStep={handleNextStep}
-          onMarkComplete={handleCompleteStep}
-          onStartTimer={() => timerRef.current?.start()}
-          onPauseTimer={() => timerRef.current?.pause()}
-          onAskAI={handleAskAI}
-        />
-
         {/* Header */}
         <div className="flex items-start justify-between">
           <div>
@@ -322,13 +318,15 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
           </div>
         )}
 
-        {/* Timer — key forces full reset when step changes; ref exposes start/pause */}
+        {/* Timer — key forces full reset when step changes; notifyTimerComplete
+            keeps HandsFreeMode in sync */}
         {hasTimer && (
           <Timer
             key={currentStep.id}
             ref={timerRef}
             seconds={currentStep.timer_seconds!}
             autoStart
+            onComplete={notifyTimerComplete}
           />
         )}
 

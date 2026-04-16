@@ -5,37 +5,58 @@ interface InterpretContext {
   currentPage: string
   currentStep: string
   protocolName: string
+  stepNumber?: number
+  totalSteps?: number
 }
 
 export async function POST(req: NextRequest) {
   const { transcript, context }: { transcript: string; context: InterpretContext } =
     await req.json()
 
+  const onProtocolPage =
+    context.currentPage?.includes('/protocol/') &&
+    !context.currentPage?.endsWith('/protocol')
+
+  const protocolContext = onProtocolPage
+    ? `- Current protocol: ${context.protocolName}
+- Current step: ${context.stepNumber ?? '?'} of ${context.totalSteps ?? '?'} — "${context.currentStep}"`
+    : `- Current page: ${context.currentPage}`
+
   const systemPrompt = `You are a voice command interpreter for Benchly, a lab protocol management app.
 The user is hands-free in a lab and just spoke a voice command.
 
-Current context:
-- Current page: ${context.currentPage}
-- Current protocol step: ${context.currentStep}
-- Protocol name: ${context.protocolName}
-- Available pages: dashboard, protocol walker, samples, lab meeting
+${protocolContext}
+- Available pages: dashboard (/dashboard), protocols (/protocol), samples (/samples), lab meeting (/meeting)
 
-Your job is to interpret what the user wants and return ONLY a JSON object with no other text.
+Your job: interpret what the user wants and return ONLY a JSON object with no other text.
 
 Possible actions:
-- { "action": "next_step" } — user wants to advance to the next step
-- { "action": "mark_complete" } — user wants to mark current step as done
-- { "action": "start_timer" } — user wants to start the timer
-- { "action": "pause_timer" } — user wants to pause the timer
-- { "action": "navigate", "destination": "/dashboard" } — user wants to go somewhere
+- { "action": "next_step" } — advance to the next step without marking complete
+- { "action": "mark_complete" } — mark current step done and advance
+- { "action": "start_timer" } — start or resume the step timer
+- { "action": "pause_timer" } — pause the step timer
+- { "action": "navigate", "destination": "/dashboard" }
 - { "action": "navigate", "destination": "/samples" }
 - { "action": "navigate", "destination": "/meeting" }
 - { "action": "navigate", "destination": "/protocol" }
-- { "action": "ask_ai", "question": "the user's question" } — user is asking a lab question
-- { "action": "exit_handsfree" } — user wants to stop hands-free mode, exit, turn off listening
-- { "action": "unknown" } — you genuinely cannot determine intent
+- { "action": "ask_ai", "question": "the user's question" } — a lab/science question
+- { "action": "exit_handsfree" } — stop hands-free mode
+- { "action": "unknown" } — genuinely cannot determine intent
 
-Be generous in interpretation. "main page", "home", "go back" = dashboard. "I'm done", "finished", "completed" = mark_complete. Any science question = ask_ai. "exit", "stop listening", "turn off", "deactivate", "quit hands-free", "stop" = exit_handsfree. Natural phrasing like "can you take me to..." or "show me..." should work.`
+Interpretation guide:
+- "next step", "skip" → next_step
+- "done", "finished", "complete", "mark complete", "I'm done", "step done" → mark_complete
+- "start", "ready", "begin", "go", "start timer", "ready to start" → start_timer
+- "pause", "pause timer", "stop timer", "hold on" → pause_timer
+- "home", "main page", "go back", "dashboard" → navigate /dashboard
+- "samples", "sample tracker" → navigate /samples
+- "meeting", "lab meeting" → navigate /meeting
+- "protocols", "protocol list" → navigate /protocol
+- "exit", "stop", "stop listening", "turn off", "deactivate", "quit" → exit_handsfree
+- Any science/lab question → ask_ai
+- Natural phrasing ("can you take me to…", "show me…", "what is…") should work
+
+Be generous. Err toward a recognised action over "unknown".`
 
   try {
     const response = await anthropic.messages.create({
@@ -54,7 +75,6 @@ Be generous in interpretation. "main page", "home", "go back" = dashboard. "I'm 
     const parsed = JSON.parse(cleaned)
     return NextResponse.json(parsed)
   } catch {
-    // Always return a valid response — caller handles 'unknown'
     return NextResponse.json({ action: 'unknown' })
   }
 }

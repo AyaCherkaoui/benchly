@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/auth-helpers-nextjs'
-import Sidebar from '@/components/Sidebar'
+import AppShell from '@/components/AppShell'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = cookies()
@@ -18,16 +18,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     }
   )
 
-  const { data: { session } } = await supabase.auth.getSession()
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
 
   if (!session) {
     redirect('/login')
   }
 
-  return (
-    <div className="flex min-h-screen bg-[#0d1b2a]">
-      <Sidebar />
-      <main className="flex-1 p-8 text-white">{children}</main>
-    </div>
-  )
+  return <AppShell>{children}</AppShell>
 }

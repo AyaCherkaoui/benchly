@@ -1,10 +1,11 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { Mic, MicOff } from 'lucide-react'
 import { speakText } from '@/lib/speak'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
+import { useProtocolSession } from '@/contexts/ProtocolSessionContext'
 
 // ── Speech API types ──────────────────────────────────────────────────────────
 
@@ -48,7 +49,7 @@ interface SpeechRecognitionErrorEvent extends Event {
   error: string
 }
 
-// ── Action types (discriminated union) ────────────────────────────────────────
+// ── Action types ──────────────────────────────────────────────────────────────
 
 type InterpretedAction =
   | { action: 'next_step' }
@@ -59,19 +60,6 @@ type InterpretedAction =
   | { action: 'ask_ai'; question: string }
   | { action: 'exit_handsfree' }
   | { action: 'unknown' }
-
-// ── Props ─────────────────────────────────────────────────────────────────────
-
-interface HandsFreeModeProps {
-  currentStepTitle: string
-  protocolName: string
-  protocolId?: string
-  onNextStep: () => void
-  onMarkComplete: () => void
-  onStartTimer: () => void
-  onPauseTimer: () => void
-  onAskAI: (question: string) => Promise<void>
-}
 
 // ── Keyword fallback ──────────────────────────────────────────────────────────
 
@@ -86,7 +74,15 @@ function keywordFallback(t: string): InterpretedAction {
     t === 'done'
   )
     return { action: 'mark_complete' }
-  if (t.includes('start timer')) return { action: 'start_timer' }
+  if (
+    t === 'start' ||
+    t === 'ready' ||
+    t === 'begin' ||
+    t === 'go' ||
+    t.includes('start timer') ||
+    t.includes('ready to start')
+  )
+    return { action: 'start_timer' }
   if (t.includes('pause timer') || t === 'pause') return { action: 'pause_timer' }
   if (t.includes('dashboard') || t.includes('home') || t.includes('main page'))
     return { action: 'navigate', destination: '/dashboard' }
@@ -111,29 +107,33 @@ function keywordFallback(t: string): InterpretedAction {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function HandsFreeMode({
-  currentStepTitle,
-  protocolName,
-  protocolId,
-  onNextStep,
-  onMarkComplete,
-  onStartTimer,
-  onPauseTimer,
-  onAskAI,
-}: HandsFreeModeProps) {
+export default function HandsFreeMode() {
   const router = useRouter()
+  const pathname = usePathname()
   const supabase = createSupabaseBrowserClient()
+  const { sessionState, callbacksRef, timerCompleteListenersRef } = useProtocolSession()
 
   const [active, setActive] = useState(false)
   const [supported, setSupported] = useState(false)
   const [statusText, setStatusText] = useState('Listening…')
+  const [lastHeard, setLastHeard] = useState('')
+  const [lastAction, setLastAction] = useState('')
 
   const recognitionRef = useRef<SpeechRecognition | null>(null)
-  const activeRef = useRef(false) // ref so onend/onresult closures always see current value
+  const activeRef = useRef(false)
+  const isProcessingRef = useRef(false)
 
-  // Keep context fresh so closures always send the latest step/protocol
-  const contextRef = useRef({ currentStepTitle, protocolName, protocolId })
-  contextRef.current = { currentStepTitle, protocolName, protocolId }
+  // Track which step/protocol we've already spoken the intro for
+  const prevStepIndexRef = useRef<number | null>(null)
+  const prevProtocolIdRef = useRef<string | null>(null)
+
+  // Always-fresh refs for async closures
+  const sessionStateRef = useRef(sessionState)
+  sessionStateRef.current = sessionState
+  const pathnameRef = useRef(pathname)
+  pathnameRef.current = pathname
+
+  // ── Browser support ─────────────────────────────────────────────────────
 
   useEffect(() => {
     setSupported(
@@ -142,31 +142,113 @@ export default function HandsFreeMode({
     )
   }, [])
 
+  // ── Proactive step intro ─────────────────────────────────────────────────
+  // Fires when hands-free is active AND the protocol step changes (or protocol
+  // first becomes available after activation).
+
+  useEffect(() => {
+    if (!active) {
+      // Reset tracking when mode is turned off
+      prevStepIndexRef.current = null
+      prevProtocolIdRef.current = null
+      return
+    }
+
+    const { protocol, steps, currentStepIndex } = sessionState
+    if (!protocol || !steps.length) return
+
+    const protocolId = protocol.id
+    const prevProtocolId = prevProtocolIdRef.current
+    const prevStepIndex = prevStepIndexRef.current
+
+    const protocolChanged = prevProtocolId !== protocolId
+    const stepChanged = prevStepIndex !== currentStepIndex
+
+    if (!protocolChanged && !stepChanged) return
+
+    prevProtocolIdRef.current = protocolId
+    prevStepIndexRef.current = currentStepIndex
+
+    // Delay on first intro (after "Hands-free mode activated." finishes ~1.5 s)
+    const delay = prevProtocolId === null ? 2000 : 0
+
+    const timer = setTimeout(() => {
+      if (activeRef.current) speakStepIntro(currentStepIndex)
+    }, delay)
+
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, sessionState.currentStepIndex, sessionState.protocol?.id])
+
+  // ── Timer-complete listener ──────────────────────────────────────────────
+
+  useEffect(() => {
+    const handler = () => {
+      if (!activeRef.current) return
+      speakText("Timer complete. Let me know when you're done with this step.").catch(
+        () => {}
+      )
+    }
+    timerCompleteListenersRef.current.push(handler)
+    return () => {
+      timerCompleteListenersRef.current = timerCompleteListenersRef.current.filter(
+        (fn) => fn !== handler
+      )
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // ── Step intro speech ────────────────────────────────────────────────────
+
+  function speakStepIntro(stepIndex: number) {
+    const { protocol, steps } = sessionStateRef.current
+    if (!protocol || !steps.length) return
+    const step = steps[stepIndex]
+    if (!step) return
+
+    const firstSentence = (step.instructions ?? '').split(/[.!?]/)[0]?.trim() ?? ''
+    const hasTimer = !!step.timer_seconds
+
+    let intro = `You're on step ${stepIndex + 1} of ${steps.length} — ${step.title}.`
+    if (firstSentence) intro += ` ${firstSentence}.`
+
+    speakText(intro)
+      .then(() => {
+        if (hasTimer && activeRef.current) {
+          return speakText("Say 'start' when you want to begin the timer.")
+        }
+      })
+      .catch(() => {})
+  }
+
   // ── Claude interpretation (with keyword fallback) ─────────────────────────
 
   async function interpretTranscript(transcript: string): Promise<InterpretedAction> {
     try {
+      const { protocol, steps, currentStepIndex } = sessionStateRef.current
+      const currentStep = steps[currentStepIndex]
       const res = await fetch('/api/interpret', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           transcript,
           context: {
-            currentPage: 'protocol walker',
-            currentStep: contextRef.current.currentStepTitle,
-            protocolName: contextRef.current.protocolName,
+            currentPage: pathnameRef.current,
+            currentStep: currentStep?.title ?? '',
+            protocolName: protocol?.name ?? '',
+            stepNumber: currentStepIndex + 1,
+            totalSteps: steps.length,
           },
         }),
       })
       if (!res.ok) throw new Error(`interpret ${res.status}`)
       return (await res.json()) as InterpretedAction
     } catch {
-      // Network failure or API error → fall back to keywords so mode never breaks
       return keywordFallback(transcript)
     }
   }
 
-  // ── Supabase logging (silent — never breaks hands-free mode) ──────────────
+  // ── Supabase logging ──────────────────────────────────────────────────────
 
   async function logVoice(
     transcript: string,
@@ -186,9 +268,14 @@ export default function HandsFreeMode({
           ? 'unknown'
           : 'command'
 
+      const protocolId =
+        action.action !== 'navigate' && action.action !== 'exit_handsfree'
+          ? (sessionStateRef.current.protocol?.id ?? null)
+          : null
+
       await supabase.from('voice_logs').insert({
         user_id: user.id,
-        protocol_id: contextRef.current.protocolId ?? null,
+        protocol_id: protocolId,
         type,
         transcript,
         response: response ?? null,
@@ -204,40 +291,41 @@ export default function HandsFreeMode({
   async function executeAction(action: InterpretedAction, transcript: string) {
     console.log('[HandsFree] Action received:', JSON.stringify(action))
 
+    const callbacks = callbacksRef.current
     let response: string | undefined
 
     switch (action.action) {
       case 'next_step':
-        setStatusText('Moving to next step')
+        setLastAction('Next step')
         response = 'Moving to next step.'
         await speakText(response)
-        onNextStep()
+        callbacks?.onNextStep()
         break
 
       case 'mark_complete':
-        setStatusText('Marking step complete')
+        setLastAction('Mark complete')
         response = 'Got it. Step marked as complete.'
         await speakText(response)
-        onMarkComplete()
+        callbacks?.onMarkComplete()
         break
 
       case 'start_timer':
-        setStatusText('Starting timer')
+        setLastAction('Start timer')
         response = 'Timer started.'
         await speakText(response)
-        onStartTimer()
+        callbacks?.onStartTimer()
         break
 
       case 'pause_timer':
-        setStatusText('Pausing timer')
+        setLastAction('Pause timer')
         response = 'Timer paused.'
         await speakText(response)
-        onPauseTimer()
+        callbacks?.onPauseTimer()
         break
 
       case 'navigate': {
         const label = action.destination.replace('/', '') || 'dashboard'
-        setStatusText(`Navigating to ${label}`)
+        setLastAction(`Navigate → ${label}`)
         response = `Taking you to ${label}.`
         console.log('[HandsFree] Navigating to:', action.destination)
         await speakText(response)
@@ -245,15 +333,34 @@ export default function HandsFreeMode({
         break
       }
 
-      case 'ask_ai':
-        setStatusText(`Asking: "${action.question}"`)
+      case 'ask_ai': {
+        setLastAction(`Asked: "${action.question}"`)
         response = 'Let me check that for you.'
         await speakText(response)
-        await onAskAI(action.question)
+        try {
+          const { steps, currentStepIndex } = sessionStateRef.current
+          const currentStep = steps[currentStepIndex]
+          const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              message: action.question,
+              currentStep: currentStep?.title ?? '',
+            }),
+          })
+          const data = await res.json()
+          if (data.reply) {
+            response = data.reply
+            await speakText(data.reply)
+          }
+        } catch {
+          await speakText("Sorry, I couldn't get an answer right now.")
+        }
         break
+      }
 
       case 'exit_handsfree':
-        setStatusText('Exiting hands-free mode')
+        setLastAction('Exit')
         response = 'Hands-free mode deactivated.'
         await speakText(response)
         stopHandsFree()
@@ -261,15 +368,14 @@ export default function HandsFreeMode({
 
       case 'unknown':
       default:
-        setStatusText('Listening…')
+        // Don't update lastAction — keep showing previous action
         break
     }
 
     await logVoice(transcript, action, response)
 
-    // Keep the status visible for 4 s before resetting to "Listening…"
     if (action.action !== 'unknown' && action.action !== 'exit_handsfree') {
-      setTimeout(() => setStatusText('Listening…'), 4000)
+      setStatusText('Listening…')
     }
   }
 
@@ -280,7 +386,7 @@ export default function HandsFreeMode({
     if (!SR) return
 
     const recognition = new SR()
-    recognition.continuous = false // restart manually — more stable in Safari
+    recognition.continuous = false // manual restart — more stable in Safari
     recognition.interimResults = false
     recognition.maxAlternatives = 1
     recognition.lang = 'en-US'
@@ -288,9 +394,7 @@ export default function HandsFreeMode({
     recognition.onstart = () => setStatusText('Listening…')
 
     recognition.onend = () => {
-      // Only auto-restart if this instance is still current.
-      // If recognitionRef.current is null, onresult took ownership and
-      // will restart manually — don't double-start.
+      // Only auto-restart if this instance is still current and we're not processing
       if (activeRef.current && recognitionRef.current === recognition) {
         startRecognition()
       }
@@ -298,31 +402,36 @@ export default function HandsFreeMode({
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       if (event.error === 'not-allowed') {
-        console.warn('Microphone permission denied')
+        console.warn('[HandsFree] Microphone permission denied')
         stopHandsFree()
         return
       }
-      // Transient errors (no-speech, audio-capture): restart only if still current
       if (activeRef.current && recognitionRef.current === recognition) {
         startRecognition()
       }
     }
 
     recognition.onresult = async (event: SpeechRecognitionEvent) => {
+      // Guard: ignore if already processing a command
+      if (isProcessingRef.current) return
+      isProcessingRef.current = true
+
       const transcript = event.results[0][0].transcript.toLowerCase().trim()
 
-      // Null out ref BEFORE calling stop() so the onend handler above knows
-      // we're processing and must not auto-restart. (Safari fix)
+      // Null out ref BEFORE stop() so onend won't auto-restart while we process
       recognitionRef.current = null
       recognition.stop()
-      setStatusText(`Heard: "${transcript}" — interpreting…`)
+
+      setLastHeard(transcript)
+      setStatusText('Interpreting…')
 
       const action = await interpretTranscript(transcript)
       await executeAction(action, transcript)
 
-      // navigate / exit_handsfree: stop permanently (page change or mode exit)
-      // everything else: restart after 1500 ms so spoken confirmation finishes
-      // before the mic opens again
+      isProcessingRef.current = false
+
+      // navigate / exit_handsfree stop permanently; everything else restarts
+      // after 1500 ms so the TTS confirmation finishes before the mic opens
       if (
         activeRef.current &&
         action.action !== 'exit_handsfree' &&
@@ -342,49 +451,78 @@ export default function HandsFreeMode({
     activeRef.current = true
     setActive(true)
     startRecognition()
-    speakText('Hands-free mode activated. I am listening.')
+    speakText('Hands-free mode activated.').catch(() => {})
   }
 
   function stopHandsFree() {
     activeRef.current = false
+    isProcessingRef.current = false
     recognitionRef.current?.stop()
     recognitionRef.current = null
     setActive(false)
     setStatusText('Listening…')
+    setLastHeard('')
+    setLastAction('')
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (!supported) return null
 
+  // ── Inactive: small floating mic button ───────────────────────────────────
   if (!active) {
     return (
       <button
         onClick={startHandsFree}
-        className="flex items-center gap-2 rounded-xl bg-teal-500/10 px-4 py-2.5 text-sm font-semibold text-teal-400 ring-1 ring-teal-500/30 transition hover:bg-teal-500/20"
+        title="Activate hands-free mode"
+        aria-label="Activate hands-free mode"
+        className="fixed bottom-24 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-teal-500 shadow-lg transition hover:bg-teal-400 active:scale-95"
       >
-        <Mic size={16} />
-        Enter Hands-Free Mode
+        <Mic size={22} className="text-white" />
       </button>
     )
   }
 
+  // ── Active: floating card ─────────────────────────────────────────────────
   return (
-    <div className="flex items-center gap-3 rounded-xl bg-green-500/10 px-4 py-2.5 ring-1 ring-green-500/30">
-      <span className="relative flex h-3 w-3 flex-shrink-0">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-        <span className="relative inline-flex h-3 w-3 rounded-full bg-green-500" />
-      </span>
-      <span className="min-w-0 flex-1 truncate text-sm font-medium text-green-400">
-        Hands-Free Active — {statusText}
-      </span>
-      <button
-        onClick={stopHandsFree}
-        className="ml-auto flex flex-shrink-0 items-center gap-1.5 rounded-lg bg-slate-700 px-3 py-1 text-xs font-semibold text-white transition hover:bg-slate-600"
-      >
-        <MicOff size={13} />
-        Exit
-      </button>
+    <div className="fixed bottom-24 right-6 z-50 w-[300px] overflow-hidden rounded-2xl bg-[#152235] shadow-2xl ring-1 ring-green-500/30">
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 py-3">
+        <span className="relative flex h-3 w-3 flex-shrink-0">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+          <span className="relative inline-flex h-3 w-3 rounded-full bg-green-500" />
+        </span>
+        <span className="flex-1 truncate text-sm font-semibold text-green-400">
+          {statusText}
+        </span>
+        <button
+          onClick={stopHandsFree}
+          title="Exit hands-free mode"
+          className="flex-shrink-0 rounded-lg p-1 text-slate-400 transition hover:text-white"
+        >
+          <MicOff size={16} />
+        </button>
+      </div>
+
+      {/* Last heard */}
+      {lastHeard && (
+        <div className="border-t border-slate-700/50 px-4 py-2">
+          <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            Heard
+          </p>
+          <p className="truncate text-sm text-slate-300">"{lastHeard}"</p>
+        </div>
+      )}
+
+      {/* Last action */}
+      {lastAction && (
+        <div className="border-t border-slate-700/50 px-4 py-2">
+          <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            Action
+          </p>
+          <p className="truncate text-sm text-teal-400">{lastAction}</p>
+        </div>
+      )}
     </div>
   )
 }
