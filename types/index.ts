@@ -28,11 +28,12 @@ export interface Session {
 export interface Sample {
   id: string
   user_id: string
-  session_id: string
+  session_id?: string | null
+  protocol_id?: string | null
   sample_id_label: string
   tube_label: string
   location: string
-  notes?: string
+  notes?: string | null
   created_at: string
 }
 
