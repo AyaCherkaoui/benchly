@@ -280,7 +280,7 @@ export default function HandsFreeMode({
     if (!SR) return
 
     const recognition = new SR()
-    recognition.continuous = false // restart manually — more stable across browsers
+    recognition.continuous = false // restart manually — more stable in Safari
     recognition.interimResults = false
     recognition.maxAlternatives = 1
     recognition.lang = 'en-US'
@@ -288,7 +288,12 @@ export default function HandsFreeMode({
     recognition.onstart = () => setStatusText('Listening…')
 
     recognition.onend = () => {
-      if (activeRef.current) startRecognition()
+      // Only auto-restart if this instance is still current.
+      // If recognitionRef.current is null, onresult took ownership and
+      // will restart manually — don't double-start.
+      if (activeRef.current && recognitionRef.current === recognition) {
+        startRecognition()
+      }
     }
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
@@ -297,25 +302,35 @@ export default function HandsFreeMode({
         stopHandsFree()
         return
       }
-      // Transient errors (no-speech, audio-capture): just restart
-      if (activeRef.current) startRecognition()
+      // Transient errors (no-speech, audio-capture): restart only if still current
+      if (activeRef.current && recognitionRef.current === recognition) {
+        startRecognition()
+      }
     }
 
     recognition.onresult = async (event: SpeechRecognitionEvent) => {
       const transcript = event.results[0][0].transcript.toLowerCase().trim()
 
-      // Pause the loop while we process (onend will fire and see activeRef = true
-      // but recognitionRef = null, so startRecognition won't double-start)
+      // Null out ref BEFORE calling stop() so the onend handler above knows
+      // we're processing and must not auto-restart. (Safari fix)
       recognitionRef.current = null
+      recognition.stop()
       setStatusText(`Heard: "${transcript}" — interpreting…`)
 
       const action = await interpretTranscript(transcript)
       await executeAction(action, transcript)
 
-      // Resume loop if still active
-      if (activeRef.current) {
-        recognitionRef.current = recognition // sentinel
-        startRecognition()
+      // navigate / exit_handsfree: stop permanently (page change or mode exit)
+      // everything else: restart after 1500 ms so spoken confirmation finishes
+      // before the mic opens again
+      if (
+        activeRef.current &&
+        action.action !== 'exit_handsfree' &&
+        action.action !== 'navigate'
+      ) {
+        setTimeout(() => {
+          if (activeRef.current) startRecognition()
+        }, 1500)
       }
     }
 
