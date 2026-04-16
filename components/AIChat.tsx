@@ -14,12 +14,49 @@ interface AIChatProps {
   onClose: () => void
 }
 
-// Extend window for browser speech API prefixes
+// Browser Speech API type declarations (not in all TS lib targets)
 declare global {
   interface Window {
-    SpeechRecognition: typeof SpeechRecognition
-    webkitSpeechRecognition: typeof SpeechRecognition
+    SpeechRecognition: new () => SpeechRecognition
+    webkitSpeechRecognition: new () => SpeechRecognition
   }
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean
+  interimResults: boolean
+  maxAlternatives: number
+  lang: string
+  start(): void
+  stop(): void
+  abort(): void
+  onstart: (() => void) | null
+  onend: (() => void) | null
+  onresult: ((event: SpeechRecognitionEvent) => void) | null
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null
+}
+
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList
+}
+
+interface SpeechRecognitionResultList {
+  [index: number]: SpeechRecognitionResult
+  length: number
+}
+
+interface SpeechRecognitionResult {
+  [index: number]: SpeechRecognitionAlternative
+  isFinal: boolean
+}
+
+interface SpeechRecognitionAlternative {
+  transcript: string
+  confidence: number
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string
 }
 
 export default function AIChat({ currentStep, open, onClose }: AIChatProps) {
@@ -79,7 +116,7 @@ export default function AIChat({ currentStep, open, onClose }: AIChatProps) {
 
     const updated: Message[] = [
       ...next,
-      { role: 'assistant', content: data.reply },
+      { role: 'assistant' as const, content: data.reply },
     ].slice(-10)
     setMessages(updated)
     messagesRef.current = updated
