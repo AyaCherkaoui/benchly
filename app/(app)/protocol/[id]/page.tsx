@@ -10,8 +10,10 @@ import {
   MessageCircle,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
-import Timer from '@/components/Timer'
+import { speakText } from '@/lib/speak'
+import Timer, { TimerHandle } from '@/components/Timer'
 import AIChat from '@/components/AIChat'
+import HandsFreeMode from '@/components/HandsFreeMode'
 import { Protocol, Step } from '@/types'
 
 export default function ProtocolWalkerPage({ params }: { params: { id: string } }) {
@@ -28,9 +30,18 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
   const [savedIndicator, setSavedIndicator] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  // Track session ID in a ref too so the save callback always sees the latest value
+  // Refs so callbacks always see the latest values without stale closures
   const sessionIdRef = useRef<string | null>(null)
   sessionIdRef.current = sessionId
+  const stepsRef = useRef<Step[]>(steps)
+  stepsRef.current = steps
+  const currentStepIndexRef = useRef(currentStepIndex)
+  currentStepIndexRef.current = currentStepIndex
+  const completedStepsRef = useRef<number[]>(completedSteps)
+  completedStepsRef.current = completedSteps
+
+  // Timer imperative handle
+  const timerRef = useRef<TimerHandle>(null)
 
   const loadProtocol = useCallback(async () => {
     const {
@@ -58,7 +69,6 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
     setProtocol(protocolData)
     setSteps(stepsData)
 
-    // Resume existing session if one exists
     const { data: existingSession } = await supabase
       .from('sessions')
       .select('*')
@@ -125,21 +135,47 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
   }
 
   async function handleCompleteStep() {
+    const steps = stepsRef.current
+    const idx = currentStepIndexRef.current
     if (!steps.length) return
-    const currentStep = steps[currentStepIndex]
-    const newCompleted = [...completedSteps, currentStep.step_number]
+
+    const currentStep = steps[idx]
+    const newCompleted = [...completedStepsRef.current, currentStep.step_number]
     setCompletedSteps(newCompleted)
 
-    const isLast = currentStepIndex === steps.length - 1
+    const isLast = idx === steps.length - 1
 
     if (isLast) {
       setProtocolComplete(true)
       await saveSession(newCompleted, currentStep.step_number)
     } else {
-      const nextIndex = currentStepIndex + 1
+      const nextIndex = idx + 1
       setCurrentStepIndex(nextIndex)
       await saveSession(newCompleted, steps[nextIndex].step_number)
     }
+  }
+
+  function handleNextStep() {
+    const steps = stepsRef.current
+    const idx = currentStepIndexRef.current
+    if (idx < steps.length - 1) setCurrentStepIndex(idx + 1)
+  }
+
+  async function handleAskAI(question: string) {
+    const steps = stepsRef.current
+    const idx = currentStepIndexRef.current
+    const currentStep = steps[idx]
+
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: question,
+        currentStep: currentStep?.title ?? '',
+      }),
+    })
+    const data = await res.json()
+    if (data.reply) await speakText(data.reply)
   }
 
   // ─── Loading ────────────────────────────────────────────────────────────────
@@ -159,7 +195,7 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
     )
   }
 
-  // ─── Complete screen ─────────────────────────────────────────────────────────
+  // ─── Complete screen ──────────────────────────────────────────────────────
   if (protocolComplete) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
@@ -178,13 +214,14 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
     )
   }
 
-  // ─── Walker ──────────────────────────────────────────────────────────────────
+  // ─── Walker ───────────────────────────────────────────────────────────────
   const currentStep = steps[currentStepIndex]
   const alreadyCompleted = completedSteps.includes(currentStep.step_number)
+  const hasTimer = !!currentStep.timer_seconds
 
   return (
     <div className="flex h-[calc(100vh-4rem)] gap-6">
-      {/* ── Left panel: step list ─────────────────────────────────────────────── */}
+      {/* ── Left panel: step list ─────────────────────────────────────────── */}
       <aside className="w-72 flex-shrink-0 overflow-y-auto rounded-2xl bg-[#152235] p-4">
         <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-400">
           {protocol.name}
@@ -208,10 +245,7 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
                 }`}
               >
                 {isCompleted ? (
-                  <CheckCircle
-                    size={18}
-                    className="mt-0.5 flex-shrink-0 text-green-400"
-                  />
+                  <CheckCircle size={18} className="mt-0.5 flex-shrink-0 text-green-400" />
                 ) : (
                   <Circle
                     size={18}
@@ -221,20 +255,12 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
                   />
                 )}
                 <div className="min-w-0">
-                  <p
-                    className={`text-xs ${
-                      isCurrent ? 'text-teal-400' : 'text-slate-500'
-                    }`}
-                  >
+                  <p className={`text-xs ${isCurrent ? 'text-teal-400' : 'text-slate-500'}`}>
                     Step {step.step_number}
                   </p>
                   <p
                     className={`truncate text-sm font-medium ${
-                      isCurrent
-                        ? 'text-white'
-                        : isCompleted
-                        ? 'text-slate-400'
-                        : 'text-slate-500'
+                      isCurrent ? 'text-white' : isCompleted ? 'text-slate-400' : 'text-slate-500'
                     }`}
                   >
                     {step.title}
@@ -246,8 +272,17 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
         </div>
       </aside>
 
-      {/* ── Main area ─────────────────────────────────────────────────────────── */}
+      {/* ── Main area ─────────────────────────────────────────────────────── */}
       <div className="flex flex-1 flex-col gap-5 overflow-y-auto">
+        {/* Hands-free mode — top of main area */}
+        <HandsFreeMode
+          onNextStep={handleNextStep}
+          onMarkComplete={handleCompleteStep}
+          onStartTimer={() => timerRef.current?.start()}
+          onPauseTimer={() => timerRef.current?.pause()}
+          onAskAI={handleAskAI}
+        />
+
         {/* Header */}
         <div className="flex items-start justify-between">
           <div>
@@ -277,21 +312,19 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
         {/* Warning */}
         {currentStep.warning && (
           <div className="flex items-start gap-3 rounded-2xl bg-yellow-500/10 p-5 ring-1 ring-yellow-500/30">
-            <AlertTriangle
-              size={20}
-              className="mt-0.5 flex-shrink-0 text-yellow-400"
-            />
+            <AlertTriangle size={20} className="mt-0.5 flex-shrink-0 text-yellow-400" />
             <p className="text-sm leading-relaxed text-yellow-200">
               {currentStep.warning}
             </p>
           </div>
         )}
 
-        {/* Timer — key forces full reset when step changes */}
-        {currentStep.timer_seconds && (
+        {/* Timer — key forces full reset when step changes; ref exposes start/pause */}
+        {hasTimer && (
           <Timer
             key={currentStep.id}
-            seconds={currentStep.timer_seconds}
+            ref={timerRef}
+            seconds={currentStep.timer_seconds!}
             autoStart
           />
         )}
@@ -309,7 +342,7 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
         </button>
       </div>
 
-      {/* ── Floating AI chat button ───────────────────────────────────────────── */}
+      {/* ── Floating AI chat button ──────────────────────────────────────── */}
       <button
         onClick={() => setChatOpen((o) => !o)}
         className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-teal-500 shadow-lg transition hover:bg-teal-400"
@@ -318,7 +351,7 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
         <MessageCircle size={24} className="text-white" />
       </button>
 
-      {/* ── AI Chat panel ────────────────────────────────────────────────────── */}
+      {/* ── AI Chat panel ────────────────────────────────────────────────── */}
       <AIChat
         currentStep={currentStep.title}
         open={chatOpen}

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Mic, Send, Volume2, VolumeX, X } from 'lucide-react'
+import { speakText } from '@/lib/speak'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -85,12 +86,7 @@ export default function AIChat({ currentStep, open, onClose }: AIChatProps) {
 
   function speak(text: string) {
     if (!ttsEnabledRef.current) return
-    window.speechSynthesis.cancel() // cancel any ongoing speech first
-    const utterance = new SpeechSynthesisUtterance(text)
-    utterance.rate = 0.95
-    utterance.pitch = 1
-    utterance.volume = 1
-    window.speechSynthesis.speak(utterance)
+    speakText(text)
   }
 
   async function sendMessageWith(text: string) {
@@ -135,8 +131,9 @@ export default function AIChat({ currentStep, open, onClose }: AIChatProps) {
       window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SpeechRecognition) return
 
-    // Cancel TTS before listening so the mic doesn't pick up the speaker
-    window.speechSynthesis.cancel()
+    // Cancel any ongoing TTS before listening so the mic doesn't pick up the speaker
+    window.speechSynthesis.cancel() // cancel browser TTS fallback
+    // (ElevenLabs audio stops naturally; no global cancel needed)
 
     const recognition = new SpeechRecognition()
     recognition.continuous = false
@@ -190,7 +187,7 @@ export default function AIChat({ currentStep, open, onClose }: AIChatProps) {
           {/* TTS toggle */}
           <button
             onClick={() => {
-              if (ttsEnabled) window.speechSynthesis.cancel()
+              if (ttsEnabled) window.speechSynthesis.cancel() // stop fallback TTS if active
               setTtsEnabled((v) => !v)
             }}
             title={ttsEnabled ? 'Mute voice' : 'Unmute voice'}

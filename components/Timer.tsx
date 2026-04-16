@@ -1,6 +1,11 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+
+export interface TimerHandle {
+  start(): void
+  pause(): void
+}
 
 interface TimerProps {
   seconds: number
@@ -8,12 +13,21 @@ interface TimerProps {
   onComplete?: () => void
 }
 
-export default function Timer({ seconds, autoStart = false, onComplete }: TimerProps) {
+const Timer = forwardRef<TimerHandle, TimerProps>(function Timer(
+  { seconds, autoStart = false, onComplete },
+  ref
+) {
   const [timeLeft, setTimeLeft] = useState(seconds)
   const [running, setRunning] = useState(autoStart)
   const [done, setDone] = useState(false)
   const onCompleteRef = useRef(onComplete)
   onCompleteRef.current = onComplete
+
+  // Expose start() and pause() to parent via ref
+  useImperativeHandle(ref, () => ({
+    start() { setRunning(true) },
+    pause() { setRunning(false) },
+  }))
 
   // Reset fully when the step changes (seconds prop changes)
   useEffect(() => {
@@ -48,7 +62,7 @@ export default function Timer({ seconds, autoStart = false, onComplete }: TimerP
       osc.start(ctx.currentTime)
       osc.stop(ctx.currentTime + 0.8)
     } catch {
-      // AudioContext not available (SSR or permissions denied)
+      // AudioContext not available
     }
   }
 
@@ -85,4 +99,6 @@ export default function Timer({ seconds, autoStart = false, onComplete }: TimerP
       </div>
     </div>
   )
-}
+})
+
+export default Timer
