@@ -32,9 +32,10 @@ Possible actions:
 - { "action": "navigate", "destination": "/meeting" }
 - { "action": "navigate", "destination": "/protocol" }
 - { "action": "ask_ai", "question": "the user's question" } — user is asking a lab question
+- { "action": "exit_handsfree" } — user wants to stop hands-free mode, exit, turn off listening
 - { "action": "unknown" } — you genuinely cannot determine intent
 
-Be generous in interpretation. "main page", "home", "go back" = dashboard. "I'm done", "finished", "completed" = mark_complete. Any science question = ask_ai. Natural phrasing like "can you take me to..." or "show me..." should work.`
+Be generous in interpretation. "main page", "home", "go back" = dashboard. "I'm done", "finished", "completed" = mark_complete. Any science question = ask_ai. "exit", "stop listening", "turn off", "deactivate", "quit hands-free", "stop" = exit_handsfree. Natural phrasing like "can you take me to..." or "show me..." should work.`
 
   try {
     const response = await anthropic.messages.create({

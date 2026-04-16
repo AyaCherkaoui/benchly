@@ -57,6 +57,7 @@ type InterpretedAction =
   | { action: 'pause_timer' }
   | { action: 'navigate'; destination: string }
   | { action: 'ask_ai'; question: string }
+  | { action: 'exit_handsfree' }
   | { action: 'unknown' }
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -93,6 +94,16 @@ function keywordFallback(t: string): InterpretedAction {
   if (t.includes('meeting')) return { action: 'navigate', destination: '/meeting' }
   if (t.includes('protocol') && !t.includes('step'))
     return { action: 'navigate', destination: '/protocol' }
+  if (
+    t === 'exit' ||
+    t === 'stop' ||
+    t.includes('stop listening') ||
+    t.includes('turn off') ||
+    t.includes('deactivate') ||
+    t.includes('quit hands-free') ||
+    t.includes('exit hands-free')
+  )
+    return { action: 'exit_handsfree' }
   const benchlyMatch = t.match(/^(?:hey )?benchly\s+(.+)$/)
   if (benchlyMatch) return { action: 'ask_ai', question: benchlyMatch[1] }
   return { action: 'unknown' }
@@ -191,6 +202,8 @@ export default function HandsFreeMode({
   // ── Execute interpreted action ────────────────────────────────────────────
 
   async function executeAction(action: InterpretedAction, transcript: string) {
+    console.log('[HandsFree] Action received:', JSON.stringify(action))
+
     let response: string | undefined
 
     switch (action.action) {
@@ -226,6 +239,7 @@ export default function HandsFreeMode({
         const label = action.destination.replace('/', '') || 'dashboard'
         setStatusText(`Navigating to ${label}`)
         response = `Taking you to ${label}.`
+        console.log('[HandsFree] Navigating to:', action.destination)
         await speakText(response)
         router.push(action.destination)
         break
@@ -238,6 +252,13 @@ export default function HandsFreeMode({
         await onAskAI(action.question)
         break
 
+      case 'exit_handsfree':
+        setStatusText('Exiting hands-free mode')
+        response = 'Hands-free mode deactivated.'
+        await speakText(response)
+        stopHandsFree()
+        break
+
       case 'unknown':
       default:
         setStatusText('Listening…')
@@ -245,6 +266,11 @@ export default function HandsFreeMode({
     }
 
     await logVoice(transcript, action, response)
+
+    // Keep the status visible for 4 s before resetting to "Listening…"
+    if (action.action !== 'unknown' && action.action !== 'exit_handsfree') {
+      setTimeout(() => setStatusText('Listening…'), 4000)
+    }
   }
 
   // ── Recognition loop ──────────────────────────────────────────────────────
