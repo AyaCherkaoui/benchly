@@ -276,6 +276,9 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
       <div className="flex flex-1 flex-col gap-5 overflow-y-auto">
         {/* Hands-free mode — top of main area */}
         <HandsFreeMode
+          currentStepTitle={currentStep.title}
+          protocolName={protocol.name}
+          protocolId={params.id}
           onNextStep={handleNextStep}
           onMarkComplete={handleCompleteStep}
           onStartTimer={() => timerRef.current?.start()}
