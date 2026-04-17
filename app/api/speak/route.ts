@@ -3,6 +3,8 @@ import { NextRequest } from 'next/server'
 export async function POST(req: NextRequest) {
   const { text } = await req.json()
 
+  console.log('ElevenLabs key present:', !!process.env.ELEVENLABS_API_KEY)
+
   if (!text) {
     return new Response('Missing text', { status: 400 })
   }
@@ -17,11 +19,13 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         text,
-        model_id: 'eleven_monolingual_v1',
+        model_id: 'eleven_turbo_v2',
         voice_settings: { stability: 0.5, similarity_boost: 0.75 },
       }),
     }
   )
+
+  console.log('ElevenLabs status:', response.status)
 
   if (!response.ok) {
     return new Response('ElevenLabs API error', { status: response.status })

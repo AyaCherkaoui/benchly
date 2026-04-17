@@ -11,6 +11,8 @@
 export async function speakText(text: string): Promise<void> {
   if (!text) return
 
+  console.log('speak() called with text:', text.slice(0, 50))
+
   // ── Instant preview: first 5 words via browser TTS ───────────────────────
   const words = text.trim().split(/\s+/)
   if (words.length > 5) {
