@@ -32,8 +32,9 @@ Return ONLY a JSON object — no other text:
 {"action":"navigate","destination":"/dashboard"} {"action":"navigate","destination":"/samples"}
 {"action":"navigate","destination":"/meeting"} {"action":"navigate","destination":"/protocol"}
 {"action":"ask_ai","question":"..."} {"action":"exit_handsfree"} {"action":"unknown"}
+{"action":"log_sample","tube_label":"B3","location":"-20C freezer","notes":"optional notes"}
 
-Rules: "next"/"skip"→next_step | "done"/"finished"/"complete"→mark_complete | "start"/"ready"/"begin"/"go"→start_timer | "pause"/"hold"→pause_timer | "home"/"back"→navigate /dashboard | "exit"/"stop"/"quit"→exit_handsfree | science question→ask_ai. Be generous, prefer known actions over unknown.`
+Rules: "next"/"skip"→next_step | "done"/"finished"/"complete"→mark_complete | "start"/"ready"/"begin"/"go"→start_timer | "pause"/"hold"→pause_timer | "home"/"back"→navigate /dashboard | "exit"/"stop"/"quit"→exit_handsfree | science question→ask_ai | "log sample"/"add tube"/"store tube X in Y"→log_sample (extract tube label and location). Be generous, prefer known actions over unknown.`
 
   try {
     const response = await anthropic.messages.create({

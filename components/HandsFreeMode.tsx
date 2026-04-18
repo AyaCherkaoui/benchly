@@ -58,6 +58,7 @@ type InterpretedAction =
   | { action: 'pause_timer' }
   | { action: 'navigate'; destination: string }
   | { action: 'ask_ai'; question: string }
+  | { action: 'log_sample'; tube_label: string; location: string; notes?: string }
   | { action: 'exit_handsfree' }
   | { action: 'unknown' }
 
@@ -100,6 +101,20 @@ function keywordFallback(t: string): InterpretedAction {
     t.includes('exit hands-free')
   )
     return { action: 'exit_handsfree' }
+  if (
+    t.includes('log sample') ||
+    t.includes('add tube') ||
+    t.includes('save sample') ||
+    t.includes('store tube')
+  ) {
+    const tubeMatch = t.match(/tube\s+([a-z0-9]+)/i)
+    const inMatch = t.match(/\bin\s+([\w\s°\-]+?)(?:\s*$)/i)
+    return {
+      action: 'log_sample',
+      tube_label: tubeMatch?.[1] ?? 'unknown',
+      location: inMatch?.[1]?.trim() ?? 'unknown',
+    }
+  }
   const benchlyMatch = t.match(/^(?:hey )?benchly\s+(.+)$/)
   if (benchlyMatch) return { action: 'ask_ai', question: benchlyMatch[1] }
   return { action: 'unknown' }
@@ -359,6 +374,32 @@ export default function HandsFreeMode() {
         break
       }
 
+      case 'log_sample': {
+        const label = action.tube_label
+        const loc = action.location
+        setLastAction(`Sample logged → ${label}`)
+        try {
+          const {
+            data: { user },
+          } = await supabase.auth.getUser()
+          if (user) {
+            await supabase.from('samples').insert({
+              user_id: user.id,
+              sample_id_label: `SMPL-${Date.now()}`,
+              tube_label: label,
+              location: loc,
+              notes: action.notes ?? null,
+              protocol_id: sessionStateRef.current.protocol?.id ?? null,
+            })
+          }
+          response = `Got it. Sample ${label} logged in ${loc}.`
+        } catch {
+          response = 'Sorry, I could not log that sample.'
+        }
+        await speakText(response)
+        break
+      }
+
       case 'exit_handsfree':
         setLastAction('Exit')
         response = 'Hands-free mode deactivated.'
@@ -476,7 +517,7 @@ export default function HandsFreeMode() {
         onClick={startHandsFree}
         title="Activate hands-free mode"
         aria-label="Activate hands-free mode"
-        className="fixed bottom-24 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-teal-500 shadow-lg transition hover:bg-teal-400 active:scale-95"
+        className="fixed bottom-24 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-teal-500 shadow-lg transition hover:bg-teal-400 active:scale-95"
       >
         <Mic size={22} className="text-white" />
       </button>
@@ -485,7 +526,7 @@ export default function HandsFreeMode() {
 
   // ── Active: floating card ─────────────────────────────────────────────────
   return (
-    <div className="fixed bottom-24 right-6 z-50 w-[300px] overflow-hidden rounded-2xl bg-[#152235] shadow-2xl ring-1 ring-green-500/30">
+    <div className="fixed bottom-24 right-6 z-40 w-[300px] overflow-hidden rounded-2xl bg-[#152235] shadow-2xl ring-1 ring-green-500/30">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3">
         <span className="relative flex h-3 w-3 flex-shrink-0">
