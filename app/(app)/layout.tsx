@@ -24,15 +24,5 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect('/login')
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('onboarding_complete, full_name, role')
-    .eq('id', session.user.id)
-    .single()
-
-  if (!profile || profile.onboarding_complete !== true) {
-    redirect('/onboarding')
-  }
-
   return <AppShell>{children}</AppShell>
 }
