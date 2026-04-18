@@ -4,7 +4,6 @@ import { redirect } from 'next/navigation'
 import { createServerClient } from '@supabase/auth-helpers-nextjs'
 import DashboardGreeting from '@/components/DashboardGreeting'
 import DashboardTasks from '@/components/DashboardTasks'
-import DailySummaryTrigger from '@/components/DailySummaryTrigger'
 
 function getMondayOfWeek(d: Date): Date {
   const day = d.getDay()
@@ -81,8 +80,6 @@ export default async function DashboardPage() {
 
   const today = new Date()
   const todayStr = isoDate(today)
-  const yesterdayDate = new Date(today); yesterdayDate.setDate(today.getDate() - 1)
-  const yesterdayStr = isoDate(yesterdayDate)
 
   const completedStepsDone = activeSession?.completed_steps?.length ?? 0
   const totalDone = allSessions?.reduce((acc, s) => acc + (s.completed_steps?.length ?? 0), 0) ?? 0
@@ -105,10 +102,9 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <DashboardGreeting text={greeting} />
-      <DailySummaryTrigger yesterday={yesterdayStr} />
 
       {/* ── Top 3-card row ────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
 
         {/* Card 1: Samples */}
         <div className="rounded-xl p-6 space-y-4" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
@@ -244,7 +240,8 @@ export default async function DashboardPage() {
           </Link>
         </div>
 
-        <div className="grid grid-cols-5 gap-3">
+        <div className="-mx-6 overflow-x-auto px-6 pb-1">
+        <div className="grid min-w-[500px] grid-cols-5 gap-3">
           {weekDays.map((day) => {
             const isToday = day.dateStr === todayStr
             const count = weekDayMap[day.dateStr] ?? 0
@@ -279,6 +276,7 @@ export default async function DashboardPage() {
               </Link>
             )
           })}
+        </div>
         </div>
       </div>
     </div>

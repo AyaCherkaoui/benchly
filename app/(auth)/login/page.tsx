@@ -123,7 +123,7 @@ export default function LoginPage() {
           height: '100vh',
           flexDirection: 'column',
           justifyContent: 'center',
-          paddingTop: 48,
+          paddingTop: 0,
           paddingBottom: 48,
           paddingLeft: 64,
           paddingRight: 64,
@@ -132,7 +132,7 @@ export default function LoginPage() {
         }}
       >
         {/* Logo: marginTop 48, marginBottom 64 */}
-        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 48, marginBottom: 64, textDecoration: 'none' }}>
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 0, marginBottom: 48, textDecoration: 'none' }}>
           <span style={{ fontFamily: 'Playfair Display, serif', fontSize: 18, color: '#f0f0f0', fontWeight: 400 }}>Benchly</span>
         </Link>
 
@@ -142,10 +142,10 @@ export default function LoginPage() {
           initial={{ opacity: 0, y: 44 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
-          style={{ fontFamily: 'Playfair Display, serif', fontStyle: 'italic', fontSize: 'clamp(56px, 5.5vw, 96px)', lineHeight: 0.92, letterSpacing: '-0.025em', margin: 0, color: '#f0f0f0' }}
+          style={{ fontFamily: 'Playfair Display, serif', fontSize: 'clamp(56px, 5.5vw, 96px)', lineHeight: 0.92, letterSpacing: '-0.025em', margin: 0, color: '#f0f0f0' }}
         >
           A quieter way<br />
-          <span style={{ color: '#e8a598' }}>to run the bench.</span>
+          <span style={{ color: '#e8a598', fontStyle: 'italic' }}>to run the bench.</span>
         </motion.h1>
 
         <motion.p
@@ -193,9 +193,9 @@ export default function LoginPage() {
       <div
         style={{
           flex: 1,
-          background: '#0d0d0d',
-          paddingLeft: 80,
-          paddingRight: 80,
+          background: '#0f0f0f',
+          paddingLeft: 60,
+          paddingRight: 60,
           zIndex: 1,
           position: 'relative',
         }}
@@ -211,10 +211,10 @@ export default function LoginPage() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            style={{ width: '100%', maxWidth: 440, position: 'relative', marginLeft: 'auto', marginRight: 'auto' }}
+            style={{ width: '100%', maxWidth: 500, position: 'relative' }}
           >
             {/* Static card — rotating gradient border removed */}
-            <div style={{ background: '#111111', borderRadius: 13, border: '1px solid rgba(232,165,152,0.15)', padding: '36px 36px 40px' }}>
+            <div style={{ background: '#111111', borderRadius: 13, padding: '36px 36px 40px' }}>
 
               <h2 style={{ fontFamily: 'Playfair Display, serif', fontSize: 32, color: '#f0f0f0', margin: 0, fontWeight: 400 }}>
                 Welcome back

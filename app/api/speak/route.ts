@@ -1,34 +1,28 @@
-import { NextRequest } from 'next/server'
-
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   const { text } = await req.json()
+  if (!text) return new Response('No text', { status: 400 })
 
-  console.log('ElevenLabs key present:', !!process.env.ELEVENLABS_API_KEY)
+  console.log('OpenAI TTS called with:', text.slice(0, 60))
 
-  if (!text) {
-    return new Response('Missing text', { status: 400 })
-  }
-
-  const response = await fetch(
-    'https://api.elevenlabs.io/v1/text-to-speech/21m00Tcm4TlvDq8ikWAM',
-    {
-      method: 'POST',
-      headers: {
-        'xi-api-key': process.env.ELEVENLABS_API_KEY!,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        text,
-        model_id: 'eleven_turbo_v2',
-        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
-      }),
-    }
-  )
-
-  console.log('ElevenLabs status:', response.status)
+  const response = await fetch('https://api.openai.com/v1/audio/speech', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'tts-1',
+      input: text,
+      voice: 'nova',
+      response_format: 'mp3',
+      speed: 1.1,
+    }),
+  })
 
   if (!response.ok) {
-    return new Response('ElevenLabs API error', { status: response.status })
+    const error = await response.text()
+    console.error('OpenAI TTS error:', response.status, error)
+    return new Response('TTS failed', { status: 500 })
   }
 
   const audioBuffer = await response.arrayBuffer()

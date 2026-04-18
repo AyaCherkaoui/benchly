@@ -1,6 +1,9 @@
 'use client'
 
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { motion } from 'framer-motion'
+import { toast } from 'sonner'
+import { speakText } from '@/lib/speak'
 
 export interface TimerHandle {
   start(): void
@@ -33,6 +36,7 @@ const Timer = forwardRef<TimerHandle, TimerProps>(function Timer({ seconds, onCo
     if (!running) return
     if (timeLeft <= 0) {
       setRunning(false); setDone(true)
+      // Beep
       try {
         const ctx = new AudioContext()
         const osc = ctx.createOscillator()
@@ -43,6 +47,8 @@ const Timer = forwardRef<TimerHandle, TimerProps>(function Timer({ seconds, onCo
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1)
         osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 1)
       } catch { /* ignore */ }
+      toast.success('Timer complete! Check your sample.')
+      speakText('Timer complete. Check your sample and let me know when you are ready to continue.')
       onCompleteRef.current?.()
       return
     }
@@ -53,11 +59,33 @@ const Timer = forwardRef<TimerHandle, TimerProps>(function Timer({ seconds, onCo
   const mins = Math.floor(timeLeft / 60)
   const secs = timeLeft % 60
 
+  function reset() {
+    setTimeLeft(seconds); setRunning(false); setStarted(false); setDone(false)
+  }
+
   if (done) {
     return (
-      <div className="flex items-center gap-3 rounded-lg px-5 py-4" style={{ background: 'rgba(232,165,152,0.06)', border: '1px solid rgba(232,165,152,0.2)' }}>
-        <span className="text-sm" style={{ color: 'var(--accent)' }}>Timer complete</span>
-      </div>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.4 }}
+        className="flex items-center justify-between rounded-lg px-5 py-4"
+        style={{ background: 'rgba(232,165,152,0.06)', border: '1px solid rgba(232,165,152,0.3)' }}
+      >
+        <span
+          className="font-mono text-5xl font-light"
+          style={{ color: 'var(--accent)', letterSpacing: '0.05em' }}
+        >
+          COMPLETE
+        </span>
+        <button
+          onClick={reset}
+          className="rounded-lg px-4 py-2 text-xs transition-opacity hover:opacity-80"
+          style={{ border: '1px solid var(--border)', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}
+        >
+          Reset Timer
+        </button>
+      </motion.div>
     )
   }
 
@@ -70,7 +98,7 @@ const Timer = forwardRef<TimerHandle, TimerProps>(function Timer({ seconds, onCo
             {totalMins} minute timer
           </p>
           <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, letterSpacing: '0.04em' }}>
-            Say "start timer" or click when ready
+            Say &ldquo;start timer&rdquo; or click when ready
           </p>
         </div>
         <button
@@ -101,7 +129,7 @@ const Timer = forwardRef<TimerHandle, TimerProps>(function Timer({ seconds, onCo
           {running ? 'Pause' : 'Resume'}
         </button>
         <button
-          onClick={() => { setTimeLeft(seconds); setRunning(false); setStarted(false); setDone(false) }}
+          onClick={reset}
           className="rounded-lg px-4 py-2 text-xs transition-opacity hover:opacity-80"
           style={{ border: '1px solid var(--border)', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}
         >

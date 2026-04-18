@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion'
 import { Toaster } from 'sonner'
 import Navbar from '@/components/Navbar'
-import BenchlyBar from '@/components/BenchlyBar'
+import BenchlyMic from '@/components/BenchlyMic'
 import AIChat from '@/components/AIChat'
 import { ProtocolSessionProvider } from '@/contexts/ProtocolSessionContext'
 
@@ -11,10 +11,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <ProtocolSessionProvider>
       <div className="flex min-h-screen flex-col" style={{ background: 'var(--bg-primary)' }}>
-        <BenchlyBar />
         <Navbar />
         <motion.main
-          className="flex-1 p-8"
+          className="flex-1 px-4 pt-6 pb-52 md:px-8 md:pt-10 md:pb-10"
           style={{ color: 'var(--text-primary)' }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -24,6 +23,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </motion.main>
       </div>
       <AIChat />
+      <BenchlyMic />
       <Toaster
         theme="dark"
         position="bottom-left"

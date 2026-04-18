@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, CheckCircle, ChevronRight, Circle } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { AlertTriangle, CheckCircle, ChevronRight, Circle, ArrowRight, FlaskConical, List, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { speakText } from '@/lib/speak'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import Timer, { TimerHandle } from '@/components/Timer'
 import { useProtocolSession } from '@/contexts/ProtocolSessionContext'
@@ -22,6 +24,8 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
   const [protocolComplete, setProtocolComplete] = useState(false)
   const [savedIndicator, setSavedIndicator] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [firstName, setFirstName] = useState('')
+  const [showStepsSheet, setShowStepsSheet] = useState(false)
 
   const sessionIdRef = useRef<string | null>(null)
   sessionIdRef.current = sessionId
@@ -37,13 +41,20 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
 
-    const [{ data: protocolData }, { data: stepsData }] = await Promise.all([
+    const [{ data: protocolData }, { data: stepsData }, { data: profile }] = await Promise.all([
       supabase.from('protocols').select('*').eq('id', params.id).single(),
       supabase.from('steps').select('*').eq('protocol_id', params.id).order('step_number'),
+      supabase.from('profiles').select('full_name').eq('id', user.id).single(),
     ])
 
     if (!protocolData || !stepsData?.length) { setLoading(false); return }
     setProtocol(protocolData); setSteps(stepsData)
+
+    const name = profile?.full_name?.split(' ')[0]
+      || (user.user_metadata?.full_name as string | undefined)?.split(' ')[0]
+      || user.email?.split('@')[0]
+      || ''
+    setFirstName(name)
 
     const { data: existingSession } = await supabase
       .from('sessions').select('*').eq('user_id', user.id).eq('protocol_id', params.id)
@@ -100,7 +111,6 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
 
     setSavedIndicator(true)
     setTimeout(() => setSavedIndicator(false), 2000)
-    toast.success('Session saved')
   }
 
   async function handleCompleteStep() {
@@ -114,12 +124,14 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
     if (isLast) {
       setProtocolComplete(true)
       await saveSession(newCompleted, currentStep.step_number)
+      toast.success('Protocol complete! Well done.')
+      speakText(`Protocol complete. Great work${firstName ? ' ' + firstName : ''}. You can now log your samples or start a new experiment.`)
     } else {
       const nextIndex = idx + 1
       setCurrentStepIndex(nextIndex)
       await saveSession(newCompleted, steps[nextIndex].step_number)
+      toast.success('Step complete')
     }
-    toast.success('Step complete')
   }
 
   function handleNextStep() {
@@ -144,33 +156,114 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
     )
   }
 
-  if (protocolComplete) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-6 text-center">
-        <h1 className="font-serif text-4xl font-normal" style={{ color: 'var(--text-primary)' }}>
-          Protocol Complete
-        </h1>
-        <p style={{ color: 'var(--text-muted)' }}>{protocol.name} — all {steps.length} steps done</p>
-        <button
-          onClick={() => router.push('/protocol')}
-          className="rounded-lg px-6 py-2.5 text-sm transition-opacity hover:opacity-80"
-          style={{ background: 'var(--accent)', color: '#0a0a0a', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: 11 }}
-        >
-          Back to Protocols
-        </button>
-      </div>
-    )
-  }
-
   const currentStep = steps[currentStepIndex]
   const alreadyCompleted = completedSteps.includes(currentStep.step_number)
   const hasTimer = !!currentStep.timer_seconds
+  const isLastStep = currentStepIndex === steps.length - 1
+
+  const warningLower = currentStep.warning?.toLowerCase() || ''
+  const showSampleLink = warningLower.includes('label') || warningLower.includes('sample id') || warningLower.includes('tube') || warningLower.includes('store')
 
   return (
-    <div className="flex h-[calc(100vh-6.5rem)] gap-5">
+    <>
+    {/* Mobile step progress bar */}
+    <div className="mb-4 flex items-center justify-between md:hidden">
+      <div className="min-w-0">
+        <p style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+          {protocol.name}
+        </p>
+        <div className="mt-1.5 flex items-center gap-2">
+          <div className="h-px w-24 flex-shrink-0" style={{ background: 'var(--border)' }}>
+            <div
+              className="h-px"
+              style={{
+                width: `${Math.round((completedSteps.length / steps.length) * 100)}%`,
+                background: 'var(--accent)',
+              }}
+            />
+          </div>
+          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+            {completedSteps.length}/{steps.length}
+          </span>
+        </div>
+      </div>
+      <button
+        onClick={() => setShowStepsSheet(true)}
+        className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 transition-opacity hover:opacity-80"
+        style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase' }}
+      >
+        <List size={12} /> Steps
+      </button>
+    </div>
+
+    {/* Mobile steps bottom sheet */}
+    <AnimatePresence>
+      {showStepsSheet && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 md:hidden"
+            style={{ background: 'rgba(0,0,0,0.6)' }}
+            onClick={() => setShowStepsSheet(false)}
+          />
+          <motion.div
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            className="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl md:hidden"
+            style={{ background: '#111111', border: '1px solid var(--border)', maxHeight: '70vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+          >
+            <div className="flex items-center justify-between p-4" style={{ borderBottom: '1px solid var(--border)' }}>
+              <p style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+                {protocol.name}
+              </p>
+              <button onClick={() => setShowStepsSheet(false)} style={{ color: 'var(--text-muted)' }}>
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex flex-col gap-0.5 overflow-y-auto p-3">
+              {steps.map((step, idx) => {
+                const isCompleted = completedSteps.includes(step.step_number)
+                const isCurrent = idx === currentStepIndex
+                return (
+                  <button
+                    key={step.id}
+                    onClick={() => { setCurrentStepIndex(idx); setShowStepsSheet(false) }}
+                    className="flex items-start gap-2.5 rounded-lg px-3 py-3 text-left transition-colors w-full"
+                    style={isCurrent
+                      ? { background: 'rgba(232,165,152,0.06)', borderLeft: '2px solid var(--accent)' }
+                      : { borderLeft: '2px solid transparent' }
+                    }
+                  >
+                    {isCompleted ? (
+                      <CheckCircle size={14} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--accent)' }} />
+                    ) : (
+                      <Circle size={14} className="mt-0.5 flex-shrink-0" style={{ color: isCurrent ? 'var(--accent)' : 'var(--text-muted)', opacity: isCurrent ? 1 : 0.4 }} />
+                    )}
+                    <div className="min-w-0">
+                      <p style={{ fontSize: 10, color: isCurrent ? 'var(--accent)' : 'var(--text-muted)', letterSpacing: '0.06em' }}>
+                        Step {step.step_number}
+                      </p>
+                      <p className="truncate text-sm" style={{ color: isCurrent ? 'var(--text-primary)' : 'var(--text-muted)', opacity: isCompleted || isCurrent ? 1 : 0.6, marginTop: 2 }}>
+                        {step.title}
+                      </p>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+
+    <div className="flex h-[calc(100vh-6rem)] gap-5">
       {/* ── Step list sidebar ────────────────────────────────────────────── */}
       <aside
-        className="w-64 flex-shrink-0 overflow-y-auto rounded-xl p-4"
+        className="hidden w-64 flex-shrink-0 overflow-y-auto rounded-xl p-4 md:block"
         style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}
       >
         <p className="mb-4" style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
@@ -181,9 +274,10 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
             const isCompleted = completedSteps.includes(step.step_number)
             const isCurrent = idx === currentStepIndex
             return (
-              <div
+              <button
                 key={step.id}
-                className="flex items-start gap-2.5 rounded-lg px-3 py-2.5 transition-colors"
+                onClick={() => setCurrentStepIndex(idx)}
+                className="flex items-start gap-2.5 rounded-lg px-3 py-2.5 transition-colors text-left w-full"
                 style={isCurrent
                   ? { background: 'rgba(232,165,152,0.06)', borderLeft: '2px solid var(--accent)' }
                   : { borderLeft: '2px solid transparent' }
@@ -205,14 +299,46 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
                     {step.title}
                   </p>
                 </div>
-              </div>
+              </button>
             )
           })}
         </div>
       </aside>
 
       {/* ── Main content ─────────────────────────────────────────────────── */}
-      <div className="flex flex-1 flex-col gap-5 overflow-y-auto">
+      <div className="flex flex-1 flex-col gap-5 overflow-y-auto pb-32">
+
+        {/* Completion banner */}
+        {protocolComplete && (
+          <div
+            className="rounded-xl p-5"
+            style={{ background: 'rgba(232,165,152,0.06)', border: '1px solid rgba(232,165,152,0.3)' }}
+          >
+            <p className="font-serif text-2xl font-normal italic" style={{ color: 'var(--accent)' }}>
+              Protocol complete — great work{firstName ? `, ${firstName}` : ''}.
+            </p>
+            <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
+              {protocol.name} — all {steps.length} steps done. Your steps are still visible below for review.
+            </p>
+            <div className="mt-4 flex gap-3">
+              <button
+                onClick={() => router.push('/samples')}
+                className="flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition-opacity hover:opacity-80"
+                style={{ background: 'var(--accent)', color: '#0a0a0a', letterSpacing: '0.08em', textTransform: 'uppercase' }}
+              >
+                <FlaskConical size={12} /> View Sample Tracker →
+              </button>
+              <button
+                onClick={() => router.push('/protocol')}
+                className="flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition-opacity hover:opacity-80"
+                style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}
+              >
+                Start New Experiment
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Step header */}
         <div className="flex items-start justify-between">
           <div>
@@ -240,13 +366,24 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
 
         {/* Warning */}
         {currentStep.warning && (
-          <div
-            className="flex items-start gap-3 rounded-xl p-5"
-            style={{ background: 'rgba(251,191,36,0.04)', borderLeft: '2px solid rgba(251,191,36,0.4)' }}
-          >
-            <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" style={{ color: '#f59e0b' }} />
-            <p className="text-sm leading-relaxed" style={{ color: '#fcd34d' }}>{currentStep.warning}</p>
-          </div>
+          <>
+            <div
+              className="flex items-start gap-3 rounded-xl p-5"
+              style={{ background: 'rgba(251,191,36,0.04)', borderLeft: '2px solid rgba(251,191,36,0.4)' }}
+            >
+              <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" style={{ color: '#f59e0b' }} />
+              <p className="text-sm leading-relaxed" style={{ color: '#fcd34d' }}>{currentStep.warning}</p>
+            </div>
+            {showSampleLink && (
+              <button
+                onClick={() => router.push('/samples')}
+                className="flex items-center gap-2 self-start rounded-lg px-3 py-1.5 text-xs transition-opacity hover:opacity-80"
+                style={{ border: '1px solid var(--accent)', color: 'var(--accent)', letterSpacing: '0.06em' }}
+              >
+                Log your samples <ArrowRight size={11} />
+              </button>
+            )}
+          </>
         )}
 
         {/* Timer */}
@@ -254,17 +391,20 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
           <Timer key={currentStep.id} ref={timerRef} seconds={currentStep.timer_seconds!} onComplete={notifyTimerComplete} />
         )}
 
-        {/* Mark Complete */}
-        <button
-          onClick={handleCompleteStep}
-          disabled={alreadyCompleted}
-          className="flex items-center justify-center gap-2 rounded-xl py-4 text-sm transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-30"
-          style={{ border: '1px solid var(--accent)', color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', fontSize: 11 }}
-        >
-          {currentStepIndex === steps.length - 1 ? 'Complete Protocol' : 'Mark Complete'}
-          <ChevronRight size={14} />
-        </button>
+        {/* Mark Complete / Complete Protocol */}
+        {!protocolComplete && (
+          <button
+            onClick={handleCompleteStep}
+            disabled={alreadyCompleted}
+            className="flex items-center justify-center gap-2 rounded-xl py-4 text-sm transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-30"
+            style={{ border: '1px solid var(--accent)', color: 'var(--accent)', letterSpacing: '0.1em', textTransform: 'uppercase', fontSize: 11 }}
+          >
+            {isLastStep ? 'Complete Protocol ✓' : 'Mark Complete'}
+            {!isLastStep && <ChevronRight size={14} />}
+          </button>
+        )}
       </div>
     </div>
+    </>
   )
 }

@@ -1,22 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import {
-  CheckSquare,
-  ChevronDown,
-  ChevronUp,
-  ClipboardCopy,
-  Download,
-  FlaskConical,
-  Loader2,
-  RefreshCw,
-  Square,
-} from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ChevronDown, ChevronUp, ClipboardCopy, FlaskConical, Loader2, Upload, X, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Protocol, Session, Step } from '@/types'
-
-// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface ProtocolStat {
   protocol: Protocol
@@ -34,12 +22,10 @@ interface WeeklyReport {
   created_at: string
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function weekAgoISO() {
-  const d = new Date()
-  d.setDate(d.getDate() - 7)
-  return d.toISOString()
+interface UploadedFile {
+  name: string
+  type: string
+  url: string
 }
 
 function getISOWeekNumber(date: Date): number {
@@ -63,14 +49,21 @@ function getCurrentWeekBounds(): { start: Date; end: Date } {
   return { start, end }
 }
 
+function weekAgoISO() {
+  const d = new Date(); d.setDate(d.getDate() - 7); return d.toISOString()
+}
+
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-// ─── Component ───────────────────────────────────────────────────────────────
+function fmtWeek(start: string, end: string) {
+  return `Week of ${fmtDate(start)} – ${fmtDate(end)}`
+}
 
 export default function MeetingPage() {
   const supabase = createSupabaseBrowserClient()
+  const userRef = useRef<{ id: string; name: string } | null>(null)
 
   const [sessions, setSessions] = useState<Session[]>([])
   const [statMap, setStatMap] = useState<Record<string, ProtocolStat>>({})
@@ -82,53 +75,27 @@ export default function MeetingPage() {
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null)
   const [liveReport, setLiveReport] = useState('')
 
-  const [selectedIds, setSelectedIds] = useState<string[]>([])
-  const [summary, setSummary] = useState('')
-  const [generating, setGenerating] = useState(false)
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [isDragging, setIsDragging] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [notes, setNotes] = useState('')
-  const userRef = useRef<{ id: string; name: string } | null>(null)
-
-  useEffect(() => {
-    loadData()
-    const saved = localStorage.getItem('benchly-meeting-notes')
-    if (saved) setNotes(saved)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('full_name')
-      .eq('id', user.id)
-      .single()
+    const { data: profileData } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+    userRef.current = { id: user.id, name: profileData?.full_name?.split(' ')[0] ?? 'there' }
 
-    userRef.current = {
-      id: user.id,
-      name: profileData?.full_name?.split(' ')[0] ?? 'there',
-    }
-
-    const { data: sessionData } = await supabase
-      .from('sessions')
-      .select('*')
-      .eq('user_id', user.id)
+    const { data: sessionData } = await supabase.from('sessions').select('*').eq('user_id', user.id)
 
     try {
-      const { data: reports } = await supabase
-        .from('weekly_reports')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('week_start', { ascending: false })
-        .limit(10)
+      const { data: reports } = await supabase.from('weekly_reports').select('*').eq('user_id', user.id).order('week_start', { ascending: false }).limit(20)
       setWeeklyReports((reports as WeeklyReport[]) ?? [])
     } catch { /* table may not exist */ }
 
     if (!sessionData?.length) { setLoading(false); return }
 
     const protocolIds = Array.from(new Set(sessionData.map((s) => s.protocol_id)))
-
     const [{ data: protocolData }, { data: stepsData }] = await Promise.all([
       supabase.from('protocols').select('*').in('id', protocolIds),
       supabase.from('steps').select('id, protocol_id, step_number, title, instructions').in('protocol_id', protocolIds).order('step_number'),
@@ -140,26 +107,38 @@ export default function MeetingPage() {
       const pSessions = sessionData.filter((s) => s.protocol_id === protocol.id)
       const allCompleted = pSessions.flatMap((s) => s.completed_steps ?? [])
       const unique = Array.from(new Set(allCompleted)) as number[]
-      map[protocol.id] = {
-        protocol,
-        steps: pSteps,
-        completedStepNumbers: unique,
-        progressPct: pSteps.length > 0 ? Math.round((unique.length / pSteps.length) * 100) : 0,
-      }
+      map[protocol.id] = { protocol, steps: pSteps, completedStepNumbers: unique, progressPct: pSteps.length > 0 ? Math.round((unique.length / pSteps.length) * 100) : 0 }
     }
 
     setSessions(sessionData)
     setStatMap(map)
     setWorkedProtocolIds(protocolIds)
-    setSelectedIds(protocolIds)
     setLoading(false)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { loadData() }, [loadData])
+
+  function handleFiles(files: FileList | null) {
+    if (!files) return
+    Array.from(files).forEach((file) => {
+      const url = URL.createObjectURL(file)
+      setUploadedFiles((prev) => [...prev, { name: file.name, type: file.type, url }])
+    })
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault(); setIsDragging(false)
+    handleFiles(e.dataTransfer.files)
+  }
+
+  function removeFile(name: string) {
+    setUploadedFiles((prev) => prev.filter((f) => f.name !== name))
   }
 
   async function generateWeeklyReport() {
     const user = userRef.current
     if (!user) return
-    setGeneratingReport(true)
-    setLiveReport('')
+    setGeneratingReport(true); setLiveReport('')
 
     const { start, end } = getCurrentWeekBounds()
     const weekNum = getISOWeekNumber(start)
@@ -171,8 +150,28 @@ export default function MeetingPage() {
     ])
 
     const weekStr = `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+    const fileNames = uploadedFiles.map((f) => f.name).join(', ')
 
-    const message = `You are generating a weekly lab meeting report for ${user.name}, a lab intern.\n\nWeek: ${weekStr}\n\nSESSIONS DATA:\n${JSON.stringify((weekSessions ?? []).map((s: Record<string, unknown>) => ({ protocol: (s.protocols as { name: string } | null)?.name ?? 'Unknown', current_step: s.current_step, completed_steps_count: (s.completed_steps as number[])?.length ?? 0, last_updated: s.last_updated })), null, 2)}\n\nSAMPLES LOGGED:\n${JSON.stringify(weekSamples ?? [], null, 2)}\n\nVOICE INTERACTIONS:\n${JSON.stringify((weekLogs ?? []).map((l: Record<string, unknown>) => ({ transcript: l.transcript, type: l.type, action: l.action_taken, date: (l.created_at as string)?.split('T')[0] })), null, 2)}\n\nGenerate a structured weekly lab report with exactly these sections:\n## Executive Summary\n## Daily Activity\n## Protocols Status\n## Sample Inventory\n## Key Observations\n## Next Steps\n\nBe specific, professional, and encouraging.`
+    const message = `You are generating a weekly lab meeting report for ${user.name}.
+
+Week: ${weekStr}
+${fileNames ? `Results uploaded this week: ${fileNames}. Please reference these results in your summary.` : ''}
+
+SESSIONS:\n${JSON.stringify((weekSessions ?? []).map((s: Record<string, unknown>) => ({ protocol: (s.protocols as { name: string } | null)?.name, current_step: s.current_step, steps_done: (s.completed_steps as number[])?.length ?? 0 })), null, 2)}
+
+SAMPLES:\n${JSON.stringify(weekSamples ?? [], null, 2)}
+
+VOICE INTERACTIONS:\n${JSON.stringify((weekLogs ?? []).map((l: Record<string, unknown>) => ({ transcript: l.transcript, type: l.type, date: (l.created_at as string)?.split('T')[0] })), null, 2)}
+
+Generate a structured weekly lab report with exactly these sections:
+## Executive Summary
+## Daily Activity
+## Protocols Status
+## Sample Inventory
+## Key Observations
+## Next Steps
+
+Be specific, professional, and encouraging. Write in plain prose. No bullet dashes, no markdown asterisks.`
 
     const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message, currentStep: 'Weekly Lab Report' }) })
     const data = await res.json()
@@ -184,9 +183,13 @@ export default function MeetingPage() {
         user_id: user.id, week_number: weekNum,
         week_start: start.toISOString().split('T')[0], week_end: end.toISOString().split('T')[0],
         report_content: content,
-        raw_data: { sessions: weekSessions, samples: weekSamples, voice_logs: weekLogs },
+        raw_data: { sessions: weekSessions, samples: weekSamples, voice_logs: weekLogs, files: fileNames },
       }).select().single()
-      if (saved) { setWeeklyReports((prev) => [saved as WeeklyReport, ...prev]); setExpandedReportId((saved as WeeklyReport).id) }
+      if (saved) {
+        setWeeklyReports((prev) => [saved as WeeklyReport, ...prev])
+        setExpandedReportId((saved as WeeklyReport).id)
+        toast.success('Report saved')
+      }
     } catch { /* table not yet created */ }
 
     setGeneratingReport(false)
@@ -197,216 +200,170 @@ export default function MeetingPage() {
   const thisWeekProtocolIds = Array.from(new Set(thisWeekSessions.map((s) => s.protocol_id)))
   const thisWeekSteps = thisWeekSessions.reduce((acc, s) => acc + (s.completed_steps?.length ?? 0), 0)
 
-  function toggleProtocol(id: string) {
-    setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
-  }
-
-  async function generateSummary() {
-    if (!selectedIds.length) return
-    setGenerating(true)
-    const details = selectedIds.map((id) => {
-      const stat = statMap[id]
-      if (!stat) return ''
-      const completedTitles = stat.completedStepNumbers.map((n) => stat.steps.find((s) => s.step_number === n)?.title).filter(Boolean).join(', ')
-      return `${stat.protocol.name}: completed steps — ${completedTitles || 'none recorded'}`
-    })
-    const protocolNames = selectedIds.map((id) => statMap[id]?.protocol.name).filter(Boolean).join(', ')
-    const message = `The user is a lab intern preparing for their weekly lab meeting. They worked on the following protocols this week: ${protocolNames}. Their completed steps include: ${details.join('; ')}. Generate a professional but friendly lab meeting summary they can present. Include: what they worked on, key steps completed, any notable observations, and suggested next steps. Keep it under 200 words and make it presentation-ready.`
-    const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message, currentStep: 'Lab Meeting Prep' }) })
-    const data = await res.json()
-    setSummary(data.reply ?? '')
-    setGenerating(false)
-  }
-
-  function handleNotesChange(val: string) {
-    setNotes(val)
-    localStorage.setItem('benchly-meeting-notes', val)
-  }
-
   if (loading) {
     return <div className="flex h-full items-center justify-center"><p style={{ color: 'var(--text-muted)' }}>Loading…</p></div>
   }
 
   const cardStyle = { background: 'var(--bg-card)', border: '1px solid var(--border)' }
-  const innerCardStyle = { background: '#0f0f0f', border: '1px solid var(--border)' }
+  const innerCard = { background: '#0f0f0f', border: '1px solid var(--border)' }
 
   return (
-    <div className="space-y-8">
-      {/* ── Header + Generate ─────────────────────────────────────────────── */}
-      <div className="flex items-end justify-between">
+    <div className="mx-auto max-w-6xl space-y-8">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="font-serif text-4xl font-normal" style={{ color: 'var(--text-primary)' }}>Lab Meeting</h1>
-          <p className="mt-1.5 text-sm" style={{ color: 'var(--text-muted)' }}>Weekly reports, protocol summaries, and meeting notes</p>
+          <p className="mt-1.5 text-sm" style={{ color: 'var(--text-muted)' }}>Weekly reports and experiment summaries</p>
         </div>
         <button
           onClick={generateWeeklyReport}
           disabled={generatingReport}
-          className="flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition-opacity hover:opacity-80 disabled:opacity-30"
+          className="flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition-opacity hover:opacity-80 disabled:opacity-30 w-full sm:w-auto justify-center"
           style={{ background: 'var(--accent)', color: '#0a0a0a', letterSpacing: '0.08em', textTransform: 'uppercase' }}
         >
           {generatingReport ? <Loader2 size={12} className="animate-spin" /> : <FlaskConical size={12} />}
-          {generatingReport ? 'Generating…' : "This Week's Report"}
+          {generatingReport ? 'Generating…' : "Generate This Week's Report"}
         </button>
       </div>
 
-      {/* ── Live report ───────────────────────────────────────────────────── */}
-      {liveReport && !weeklyReports.some((r) => r.report_content === liveReport) && (
-        <div className="rounded-xl p-5" style={{ ...cardStyle, borderLeft: '2px solid var(--accent)' }}>
-          <p className="mb-3" style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--accent)' }}>New Report — This Week</p>
-          <pre className="whitespace-pre-wrap text-sm leading-relaxed" style={{ color: 'var(--text-secondary)', fontFamily: 'Inter, sans-serif' }}>{liveReport}</pre>
-        </div>
-      )}
+      {/* Main layout: content + sidebar */}
+      <div className="flex flex-col gap-6 lg:flex-row">
+        {/* Left: report + results */}
+        <div className="flex-1 space-y-6">
 
-      {/* ── Past weekly reports ───────────────────────────────────────────── */}
-      {weeklyReports.length > 0 && (
-        <div className="space-y-3">
-          {weeklyReports.map((report) => {
-            const isExpanded = expandedReportId === report.id
-            return (
-              <div key={report.id} className="rounded-xl overflow-hidden" style={cardStyle}>
-                <button
-                  onClick={() => setExpandedReportId(isExpanded ? null : report.id)}
-                  className="flex w-full items-center justify-between px-5 py-4 transition-opacity hover:opacity-80"
-                >
-                  <div className="text-left">
-                    <p className="text-sm" style={{ color: 'var(--text-primary)' }}>
-                      Week {report.week_number} — {fmtDate(report.week_start)} to {fmtDate(report.week_end)}
-                    </p>
-                    {!isExpanded && report.report_content && (
-                      <p className="mt-0.5 line-clamp-1 text-xs" style={{ color: 'var(--text-muted)' }}>{report.report_content.slice(0, 120)}…</p>
+          {/* Results upload */}
+          <div className="rounded-xl p-6 space-y-4" style={cardStyle}>
+            <div>
+              <h2 className="font-serif text-2xl font-normal" style={{ color: 'var(--text-primary)' }}>Results</h2>
+              <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>Upload experimental results to include in your weekly report</p>
+            </div>
+
+            {/* Drop zone */}
+            <div
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className="cursor-pointer rounded-xl flex flex-col items-center justify-center gap-2"
+              style={{
+                height: 120,
+                border: `1.5px dashed ${isDragging ? 'var(--accent)' : 'rgba(232,165,152,0.3)'}`,
+                background: isDragging ? 'rgba(232,165,152,0.04)' : 'transparent',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <Upload size={20} style={{ color: 'var(--accent)', opacity: 0.7 }} />
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Drop files here or click to upload</p>
+              <p style={{ fontSize: 10, color: 'var(--text-muted)', opacity: 0.5, letterSpacing: '0.06em' }}>PDF · JPG · PNG · DOCX</p>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,application/pdf,.docx"
+              multiple
+              className="hidden"
+              onChange={(e) => handleFiles(e.target.files)}
+            />
+
+            {/* Uploaded files */}
+            {uploadedFiles.length > 0 && (
+              <div className="space-y-2">
+                {uploadedFiles.map((file) => (
+                  <div key={file.name} className="flex items-center gap-3 rounded-lg px-4 py-2.5" style={innerCard}>
+                    {file.type.startsWith('image/') ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={file.url} alt={file.name} className="h-10 w-10 rounded object-cover flex-shrink-0" />
+                    ) : (
+                      <div className="flex h-10 w-10 items-center justify-center rounded flex-shrink-0" style={{ background: 'rgba(232,165,152,0.1)' }}>
+                        <FileText size={16} style={{ color: 'var(--accent)' }} />
+                      </div>
                     )}
-                  </div>
-                  {isExpanded
-                    ? <ChevronUp size={14} style={{ color: 'var(--text-muted)' }} />
-                    : <ChevronDown size={14} style={{ color: 'var(--text-muted)' }} />}
-                </button>
-                {isExpanded && report.report_content && (
-                  <div className="px-5 pb-5 pt-1" style={{ borderTop: '1px solid var(--border)' }}>
-                    <pre className="whitespace-pre-wrap text-sm leading-relaxed" style={{ color: 'var(--text-secondary)', fontFamily: 'Inter, sans-serif' }}>{report.report_content}</pre>
-                    <button
-                      onClick={() => { navigator.clipboard.writeText(report.report_content ?? ''); toast.success('Copied!') }}
-                      className="mt-4 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition-opacity hover:opacity-70"
-                      style={{ border: '1px solid var(--border)', color: 'var(--text-muted)', letterSpacing: '0.06em' }}
-                    >
-                      <ClipboardCopy size={11} /> Copy
+                    <span className="flex-1 truncate text-sm" style={{ color: 'var(--text-secondary)' }}>{file.name}</span>
+                    <button onClick={() => removeFile(file.name)} className="flex-shrink-0 transition-opacity hover:opacity-70" style={{ color: 'var(--text-muted)' }}>
+                      <X size={14} />
                     </button>
                   </div>
-                )}
+                ))}
               </div>
-            )
-          })}
-        </div>
-      )}
-
-      {weeklyReports.length === 0 && !liveReport && (
-        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No weekly reports yet. Generate your first one above.</p>
-      )}
-
-      {/* ── Summary + Notes ───────────────────────────────────────────────── */}
-      <div className="flex gap-6">
-        {/* Left: Summary Generator */}
-        <div className="flex w-3/5 flex-col gap-5">
-          <div>
-            <h2 className="font-serif text-2xl font-normal" style={{ color: 'var(--text-primary)' }}>Quick Summary</h2>
-            <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>Select protocols to generate a meeting summary</p>
+            )}
           </div>
 
-          <div className="rounded-xl p-5" style={cardStyle}>
-            {workedProtocolIds.length === 0 ? (
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No protocols worked on yet — complete some steps first.</p>
+          {/* Live report (before save) */}
+          {liveReport && !weeklyReports.some((r) => r.report_content === liveReport) && (
+            <div className="rounded-xl p-6 space-y-3" style={{ ...cardStyle, borderLeft: '2px solid var(--accent)' }}>
+              <p style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--accent)' }}>New Report — This Week</p>
+              <pre className="whitespace-pre-wrap text-sm leading-relaxed" style={{ color: 'var(--text-secondary)', fontFamily: 'Inter, sans-serif' }}>{liveReport}</pre>
+            </div>
+          )}
+
+          {/* Past reports */}
+          <div>
+            <h2 className="mb-3 font-serif text-2xl font-normal" style={{ color: 'var(--text-primary)' }}>Past Reports</h2>
+            {weeklyReports.length === 0 && !liveReport ? (
+              <div className="rounded-xl p-8 text-center" style={cardStyle}>
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No past reports yet. Generate your first one above.</p>
+              </div>
             ) : (
-              <div className="flex flex-col gap-2">
-                {workedProtocolIds.map((id) => {
-                  const stat = statMap[id]
-                  if (!stat) return null
-                  const checked = selectedIds.includes(id)
+              <div className="space-y-3">
+                {weeklyReports.map((report) => {
+                  const isExpanded = expandedReportId === report.id
                   return (
-                    <button
-                      key={id}
-                      onClick={() => toggleProtocol(id)}
-                      className="flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-opacity hover:opacity-80"
-                      style={checked
-                        ? { background: 'rgba(232,165,152,0.06)', border: '1px solid rgba(232,165,152,0.25)' }
-                        : innerCardStyle}
-                    >
-                      {checked
-                        ? <CheckSquare size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-                        : <Square size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
-                      <span className="text-sm" style={{ color: checked ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                        {stat.protocol.name}
-                      </span>
-                      <span className="ml-auto text-xs" style={{ color: 'var(--text-muted)' }}>
-                        {stat.completedStepNumbers.length} step{stat.completedStepNumbers.length !== 1 ? 's' : ''}
-                      </span>
-                    </button>
+                    <div key={report.id} className="rounded-xl overflow-hidden" style={cardStyle}>
+                      <button
+                        onClick={() => setExpandedReportId(isExpanded ? null : report.id)}
+                        className="flex w-full items-center justify-between px-5 py-4 transition-opacity hover:opacity-80"
+                      >
+                        <div className="text-left">
+                          <p className="text-sm" style={{ color: 'var(--text-primary)' }}>{fmtWeek(report.week_start, report.week_end)}</p>
+                          {!isExpanded && report.report_content && (
+                            <p className="mt-0.5 line-clamp-1 text-xs" style={{ color: 'var(--text-muted)' }}>{report.report_content.slice(0, 120)}…</p>
+                          )}
+                        </div>
+                        {isExpanded ? <ChevronUp size={14} style={{ color: 'var(--text-muted)' }} /> : <ChevronDown size={14} style={{ color: 'var(--text-muted)' }} />}
+                      </button>
+                      {isExpanded && report.report_content && (
+                        <div className="px-5 pb-5 pt-1" style={{ borderTop: '1px solid var(--border)' }}>
+                          <pre className="whitespace-pre-wrap text-sm leading-relaxed" style={{ color: 'var(--text-secondary)', fontFamily: 'Inter, sans-serif' }}>{report.report_content}</pre>
+                          <button
+                            onClick={() => { navigator.clipboard.writeText(report.report_content ?? ''); toast.success('Copied!') }}
+                            className="mt-4 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition-opacity hover:opacity-70"
+                            style={{ border: '1px solid var(--border)', color: 'var(--text-muted)', letterSpacing: '0.06em' }}
+                          >
+                            <ClipboardCopy size={11} /> Export (copy)
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )
                 })}
               </div>
             )}
           </div>
-
-          <button
-            onClick={generateSummary}
-            disabled={generating || selectedIds.length === 0}
-            className="flex items-center justify-center gap-2 rounded-lg py-2.5 text-xs transition-opacity hover:opacity-80 disabled:opacity-30"
-            style={{ border: '1px solid var(--accent)', color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase' }}
-          >
-            {generating ? <><Loader2 size={12} className="animate-spin" /> Generating…</> : 'Generate Summary'}
-          </button>
-
-          {(summary || generating) && (
-            <div className="flex flex-col gap-3">
-              <textarea
-                value={summary}
-                onChange={(e) => setSummary(e.target.value)}
-                rows={10}
-                placeholder={generating ? 'Generating…' : ''}
-                disabled={generating}
-                className="resize-none rounded-xl px-5 py-4 text-sm leading-relaxed outline-none disabled:opacity-50"
-                style={{ background: '#0f0f0f', border: '1px solid rgba(232,165,152,0.25)', color: 'var(--text-secondary)' }}
-              />
-              <div className="flex gap-2">
-                {[
-                  { icon: RefreshCw, label: 'Regenerate', onClick: generateSummary, disabled: generating },
-                  { icon: ClipboardCopy, label: 'Copy', onClick: () => { navigator.clipboard.writeText(summary); toast.success('Copied!') }, disabled: !summary },
-                  { icon: Download, label: 'Export PDF', onClick: () => toast('PDF export coming soon'), disabled: false },
-                ].map(({ icon: Icon, label, onClick, disabled }) => (
-                  <button
-                    key={label}
-                    onClick={onClick}
-                    disabled={disabled}
-                    className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition-opacity hover:opacity-70 disabled:opacity-30"
-                    style={{ border: '1px solid var(--border)', color: 'var(--text-muted)', letterSpacing: '0.06em' }}
-                  >
-                    <Icon size={11} /> {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Right: Activity + Notes */}
-        <div className="flex w-2/5 flex-col gap-5">
-          <div className="rounded-xl p-5" style={cardStyle}>
-            <div className="mb-4 flex items-center gap-2">
+        {/* Right sidebar: This Week at a Glance */}
+        <div className="w-full lg:w-72 flex-shrink-0">
+          <div className="rounded-xl p-5 space-y-5 sticky top-4" style={cardStyle}>
+            <div className="flex items-center gap-2">
               <FlaskConical size={14} style={{ color: 'var(--accent)' }} />
               <h2 className="text-sm" style={{ color: 'var(--text-primary)', letterSpacing: '0.05em' }}>This Week at a Glance</h2>
             </div>
-            <div className="mb-5 grid grid-cols-2 gap-3">
-              <div className="rounded-lg p-3" style={innerCardStyle}>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg p-3" style={innerCard}>
                 <p className="font-serif text-2xl font-normal" style={{ color: 'var(--text-primary)' }}>{thisWeekProtocolIds.length}</p>
                 <p className="mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>Protocol{thisWeekProtocolIds.length !== 1 ? 's' : ''} worked on</p>
               </div>
-              <div className="rounded-lg p-3" style={innerCardStyle}>
+              <div className="rounded-lg p-3" style={innerCard}>
                 <p className="font-serif text-2xl font-normal" style={{ color: 'var(--text-primary)' }}>{thisWeekSteps}</p>
                 <p className="mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>Steps completed</p>
               </div>
             </div>
+
             {workedProtocolIds.length === 0 ? (
               <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No activity this week yet.</p>
             ) : (
-              <div className="flex flex-col gap-4">
+              <div className="space-y-4">
                 {workedProtocolIds.map((id) => {
                   const stat = statMap[id]
                   if (!stat) return null
@@ -424,18 +381,6 @@ export default function MeetingPage() {
                 })}
               </div>
             )}
-          </div>
-
-          <div className="flex flex-1 flex-col rounded-xl p-5" style={cardStyle}>
-            <h2 className="mb-1 text-sm" style={{ color: 'var(--text-primary)', letterSpacing: '0.05em' }}>Notes</h2>
-            <p className="mb-3 text-xs" style={{ color: 'var(--text-muted)' }}>Jot down observations or questions — saved locally.</p>
-            <textarea
-              value={notes}
-              onChange={(e) => handleNotesChange(e.target.value)}
-              placeholder="Write anything you want to mention at your meeting…"
-              className="flex-1 resize-none rounded-lg px-4 py-3 text-sm outline-none"
-              style={{ background: '#0f0f0f', border: '1px solid var(--border)', color: 'var(--text-secondary)', minHeight: 140 }}
-            />
           </div>
         </div>
       </div>

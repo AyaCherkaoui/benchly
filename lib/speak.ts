@@ -1,17 +1,14 @@
 /**
- * speakText — plays text via ElevenLabs TTS with an instant perceived response.
+ * speakText — plays text via OpenAI TTS.
  *
  * Strategy:
- *   1. Immediately speak the first 5 words via browser speechSynthesis (zero latency).
- *   2. Fetch the full ElevenLabs audio in parallel.
- *   3. Cancel the browser preview and play the full audio once it arrives.
- *   4. If ElevenLabs fails, cancel the preview and speak the full text via
- *      browser TTS as a fallback so the mode never goes silent.
+ *   1. Fetch audio from /api/speak (OpenAI TTS).
+ *   2. Play via Web Audio API.
+ *   3. If fetch fails, fall back to browser SpeechSynthesis.
  *
- * stopSpeaking() — cancels all active audio immediately (speechSynthesis + AudioContext).
+ * stopSpeaking() — cancels all active audio immediately.
  */
 
-// Module-level ref to the currently playing AudioContext source node
 let currentSource: AudioBufferSourceNode | null = null
 let currentAudioCtx: AudioContext | null = null
 
@@ -30,20 +27,8 @@ export function stopSpeaking(): void {
 }
 
 export async function speakText(text: string): Promise<void> {
-  if (!text) return
+  if (!text || typeof window === 'undefined') return
 
-  console.log('speak() called with text:', text.slice(0, 50))
-
-  // ── Instant preview: first 5 words via browser TTS ───────────────────────
-  const words = text.trim().split(/\s+/)
-  if (words.length > 5) {
-    window.speechSynthesis.cancel()
-    const preview = new SpeechSynthesisUtterance(words.slice(0, 5).join(' '))
-    preview.rate = 1.0
-    window.speechSynthesis.speak(preview)
-  }
-
-  // ── Full audio from ElevenLabs ────────────────────────────────────────────
   try {
     const res = await fetch('/api/speak', {
       method: 'POST',
@@ -53,9 +38,6 @@ export async function speakText(text: string): Promise<void> {
 
     if (!res.ok) throw new Error(`speak API ${res.status}`)
 
-    // Stop the browser preview before playing full audio
-    window.speechSynthesis.cancel()
-
     const arrayBuffer = await res.arrayBuffer()
     const audioCtx = new AudioContext()
     const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer)
@@ -63,7 +45,6 @@ export async function speakText(text: string): Promise<void> {
     source.buffer = audioBuffer
     source.connect(audioCtx.destination)
 
-    // Store refs so stopSpeaking() can cancel
     currentAudioCtx = audioCtx
     currentSource = source
 
@@ -77,7 +58,7 @@ export async function speakText(text: string): Promise<void> {
       }
     })
   } catch {
-    // ElevenLabs failed — speak full text via browser TTS
+    // Fallback to browser TTS
     window.speechSynthesis.cancel()
     return new Promise((resolve) => {
       const utterance = new SpeechSynthesisUtterance(text)

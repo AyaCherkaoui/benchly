@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mic, Send, Volume2, VolumeX, X, MessageSquare } from 'lucide-react'
+import { Mic, Send, Volume2, VolumeX, X, MessageCircle } from 'lucide-react'
 import { speakText } from '@/lib/speak'
 import { useProtocolSession } from '@/contexts/ProtocolSessionContext'
 
@@ -43,6 +43,8 @@ export default function AIChat() {
   const [listening, setListening] = useState(false)
   const [ttsEnabled, setTtsEnabled] = useState(true)
   const [speechSupported, setSpeechSupported] = useState(false)
+  const [sentByVoice, setSentByVoice] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
@@ -50,17 +52,18 @@ export default function AIChat() {
   messagesRef.current = messages
   const ttsEnabledRef = useRef(ttsEnabled)
   ttsEnabledRef.current = ttsEnabled
+  const sentByVoiceRef = useRef(sentByVoice)
+  sentByVoiceRef.current = sentByVoice
 
   useEffect(() => {
     setSpeechSupported(typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition))
+    const checkMobile = () => setIsMobile(window.innerWidth < 768)
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
-  function speak(text: string) {
-    if (!ttsEnabledRef.current) return
-    speakText(text)
-  }
-
-  async function sendMessageWith(text: string) {
+  async function sendMessageWith(text: string, byVoice = false) {
     const userMessage = text.trim()
     if (!userMessage || loading) return
     const next: Message[] = [...messagesRef.current, { role: 'user', content: userMessage }]
@@ -68,10 +71,14 @@ export default function AIChat() {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
     const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: userMessage, currentStep }) })
     const data = await res.json()
-    const updated: Message[] = [...next, { role: 'assistant' as const, content: data.reply }].slice(-10)
+    const aiReply: string = data.reply ?? ''
+    const updated: Message[] = [...next, { role: 'assistant' as const, content: aiReply }].slice(-10)
     setMessages(updated); messagesRef.current = updated; setLoading(false)
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
-    speak(data.reply)
+    // Only speak if message was sent by voice and TTS is enabled
+    if (byVoice && ttsEnabledRef.current) {
+      speakText(aiReply)
+    }
   }
 
   function startListening() {
@@ -86,7 +93,10 @@ export default function AIChat() {
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       const result = event.results[0]; const transcript = result[0].transcript
       setInput(transcript)
-      if (result.isFinal) setTimeout(() => sendMessageWith(transcript), 50)
+      if (result.isFinal) {
+        setSentByVoice(true)
+        setTimeout(() => sendMessageWith(transcript, true), 50)
+      }
     }
     recognitionRef.current = recognition
     setTimeout(() => recognition.start(), 100)
@@ -99,15 +109,18 @@ export default function AIChat() {
       {/* "Ask Benchly" pill trigger */}
       <button
         onClick={() => setOpen((o) => !o)}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full transition-all duration-150 hover:opacity-90"
+        className="fixed z-40 flex items-center gap-2 rounded-full transition-all duration-150 hover:opacity-90"
         style={{
           background: '#1a1a1a',
           border: '1px solid var(--border)',
           padding: '8px 14px',
+          bottom: 'calc(140px + env(safe-area-inset-bottom))',
+          right: isMobile ? '50%' : 24,
+          transform: isMobile ? 'translateX(50%)' : 'none',
         }}
         aria-label="Ask Benchly"
       >
-        <MessageSquare size={13} style={{ color: 'var(--accent)' }} />
+        <MessageCircle size={13} style={{ color: 'var(--accent)' }} />
         <span style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
           Ask Benchly
         </span>
@@ -121,12 +134,16 @@ export default function AIChat() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.97 }}
             transition={{ duration: 0.15 }}
-            className="fixed bottom-20 right-6 z-50 flex flex-col overflow-hidden rounded-xl"
+            className="fixed z-50 flex flex-col overflow-hidden"
             style={{
-              width: 340,
-              height: 460,
+              bottom: 'calc(200px + env(safe-area-inset-bottom))',
+              right: isMobile ? 16 : 24,
+              left: isMobile ? 16 : 'auto',
+              width: isMobile ? undefined : 340,
+              height: isMobile ? 'calc(100dvh - 280px)' : 460,
               background: '#111111',
               border: '1px solid var(--border)',
+              borderRadius: 16,
             }}
           >
             {/* Header */}
@@ -188,7 +205,7 @@ export default function AIChat() {
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && sendMessageWith(input)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { setSentByVoice(false); sendMessageWith(input, false) } }}
                 placeholder="Ask Benchly…"
                 className="flex-1 rounded-lg px-3 py-2 text-sm outline-none"
                 style={{ background: '#0a0a0a', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
@@ -206,7 +223,7 @@ export default function AIChat() {
                 </button>
               )}
               <button
-                onClick={() => sendMessageWith(input)}
+                onClick={() => { setSentByVoice(false); sendMessageWith(input, false) }}
                 disabled={loading}
                 className="flex-shrink-0 rounded-lg p-2 transition-opacity hover:opacity-80 disabled:opacity-30"
                 style={{ background: 'var(--accent)', color: '#0a0a0a' }}

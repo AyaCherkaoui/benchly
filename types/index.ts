@@ -23,6 +23,8 @@ export interface Session {
   completed_steps: number[]
   started_at: string
   last_updated: string
+  experiment_number?: string | null
+  project_name?: string | null
 }
 
 export interface Sample {
@@ -34,6 +36,8 @@ export interface Sample {
   tube_label: string
   location: string
   notes?: string | null
+  project_name?: string | null
+  experiment_number?: string | null
   created_at: string
 }
 
