@@ -13,7 +13,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen flex-col" style={{ background: 'var(--bg-primary)' }}>
         <Navbar />
         <motion.main
-          className="flex-1 px-4 pt-6 pb-52 md:px-8 md:pt-10 md:pb-10"
+          className="flex-1 px-4 pt-6 pb-40 md:px-8 md:pt-10 md:pb-10"
           style={{ color: 'var(--text-primary)' }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

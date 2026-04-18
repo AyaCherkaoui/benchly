@@ -73,7 +73,7 @@ const Timer = forwardRef<TimerHandle, TimerProps>(function Timer({ seconds, onCo
         style={{ background: 'rgba(232,165,152,0.06)', border: '1px solid rgba(232,165,152,0.3)' }}
       >
         <span
-          className="font-mono text-5xl font-light"
+          className="font-mono text-3xl sm:text-5xl font-light"
           style={{ color: 'var(--accent)', letterSpacing: '0.05em' }}
         >
           COMPLETE
@@ -114,7 +114,7 @@ const Timer = forwardRef<TimerHandle, TimerProps>(function Timer({ seconds, onCo
 
   return (
     <div className="flex items-center gap-6 rounded-lg px-5 py-4" style={{ background: '#0f0f0f', border: '1px solid var(--border)' }}>
-      <span className="font-mono text-5xl font-light tabular-nums" style={{ color: 'var(--text-primary)', letterSpacing: '0.05em' }}>
+      <span className="font-mono text-3xl sm:text-5xl font-light tabular-nums" style={{ color: 'var(--text-primary)', letterSpacing: '0.05em' }}>
         {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}
       </span>
       <div className="flex gap-2">

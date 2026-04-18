@@ -193,7 +193,7 @@ export default function OnboardingPage() {
 
               <div>
                 <label style={labelStyle}>Your Role</label>
-                <div className="mt-2 grid grid-cols-4 gap-2">
+                <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {ROLE_CARDS.map(({ value, label, Icon }) => {
                     const selected = role === value
                     return (

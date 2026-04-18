@@ -187,11 +187,11 @@ export default function SignupPage() {
 
       {/* ── RIGHT PANEL ────────────────────────────────────────────────────── */}
       <div
+        className="w-full lg:w-1/2"
         style={{
-          width: '50%',
           background: '#0f0f0f',
-          paddingLeft: 80,
-          paddingRight: 80,
+          paddingLeft: 'clamp(20px, 8vw, 80px)',
+          paddingRight: 'clamp(20px, 8vw, 80px)',
           zIndex: 1,
           position: 'relative',
         }}

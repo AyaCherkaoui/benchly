@@ -155,7 +155,7 @@ export default function LogPage() {
         <button onClick={() => setWeekOffset((w) => w - 1)} className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs transition-opacity hover:opacity-70" style={{ color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
           <ChevronLeft size={14} /> Prev
         </button>
-        <span className="text-sm" style={{ color: 'var(--text-primary)' }}>{formatWeekLabel(monday)}</span>
+        <span className="text-xs sm:text-sm text-center truncate px-2" style={{ color: 'var(--text-primary)' }}>{formatWeekLabel(monday)}</span>
         <button onClick={() => setWeekOffset((w) => w + 1)}
           className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs transition-opacity hover:opacity-70"
           style={{ color: 'var(--text-muted)', letterSpacing: '0.06em' }}>

@@ -95,7 +95,7 @@ export default function SamplesPage() {
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       {/* Header */}
-      <div className="flex items-end justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="font-serif text-4xl font-normal" style={{ color: 'var(--text-primary)' }}>Samples</h1>
           <p className="mt-1.5 text-sm" style={{ color: 'var(--text-muted)' }}>Track all samples across experiments</p>
