@@ -5,11 +5,11 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 
 const NAV = [
-  { href: '/dashboard', label: 'Dashboard' },
-  { href: '/protocol', label: 'Protocols' },
+  { href: '/dashboard', label: 'Home' },
+  { href: '/protocol', label: 'Protocol' },
   { href: '/samples', label: 'Samples' },
-  { href: '/log', label: 'Daily Log' },
-  { href: '/meeting', label: 'Lab Meeting' },
+  { href: '/log', label: 'Calendar' },
+  { href: '/meeting', label: 'Summary' },
 ]
 
 export default function Navbar() {
@@ -23,37 +23,57 @@ export default function Navbar() {
   }
 
   return (
-    <nav className="flex h-14 w-full items-center border-b border-slate-700/50 bg-[#0d1b2a] px-6">
+    <nav
+      className="flex h-14 w-full items-center px-8"
+      style={{ background: '#0a0a0a', borderBottom: '1px solid var(--border)' }}
+    >
       {/* Logo */}
-      <Link href="/dashboard" className="mr-10 text-lg font-bold text-teal-400 flex-shrink-0">
+      <Link
+        href="/dashboard"
+        className="mr-12 flex-shrink-0 font-serif text-lg font-normal"
+        style={{ color: 'var(--text-primary)' }}
+      >
         Benchly
       </Link>
 
-      {/* Center nav links */}
-      <div className="flex flex-1 items-center justify-center gap-1">
+      {/* Nav links */}
+      <div className="flex flex-1 items-center gap-8">
         {NAV.map(({ href, label }) => {
           const active = pathname === href || pathname.startsWith(href + '/')
           return (
             <Link
               key={href}
               href={href}
-              className={`relative px-4 py-1.5 text-sm font-medium transition-colors ${
-                active ? 'text-white' : 'text-slate-400 hover:text-white'
-              }`}
+              className="relative pb-0.5 transition-colors duration-150"
+              style={{
+                fontSize: 11,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                color: active ? 'var(--accent)' : 'var(--text-secondary)',
+              }}
             >
               {label}
               {active && (
-                <span className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-teal-400" />
+                <span
+                  className="absolute -bottom-[1px] left-0 right-0 h-px"
+                  style={{ background: 'var(--accent)' }}
+                />
               )}
             </Link>
           )
         })}
       </div>
 
-      {/* Right: sign out */}
+      {/* Sign out */}
       <button
         onClick={handleSignOut}
-        className="flex-shrink-0 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-400 transition-colors hover:bg-slate-700/40 hover:text-white"
+        className="flex-shrink-0 transition-colors duration-150 hover:opacity-80"
+        style={{
+          fontSize: 11,
+          letterSpacing: '0.1em',
+          textTransform: 'uppercase',
+          color: 'var(--text-muted)',
+        }}
       >
         Sign Out
       </button>

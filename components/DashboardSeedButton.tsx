@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Sparkles } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 
 export default function DashboardSeedButton() {
   const router = useRouter()
@@ -10,42 +10,32 @@ export default function DashboardSeedButton() {
   const [error, setError] = useState('')
 
   async function handleSeed() {
-    setLoading(true)
-    setError('')
+    setLoading(true); setError('')
     try {
       const res = await fetch('/api/seed-demo', { method: 'POST' })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error ?? 'Seed failed')
-      }
+      if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.error ?? 'Seed failed') }
       router.refresh()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load demo data.')
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }
 
   return (
-    <div className="rounded-2xl bg-teal-500/5 p-6 ring-1 ring-teal-500/20">
-      <h2 className="mb-1 text-lg font-semibold text-white">New here?</h2>
-      <p className="mb-4 text-sm text-slate-400">
-        Load realistic demo data to see how Benchly works — a PCR protocol, samples, and
-        voice logs are pre-populated so you can explore all features immediately.
+    <div className="rounded-xl p-5" style={{ background: 'rgba(232,165,152,0.04)', border: '1px solid rgba(232,165,152,0.15)' }}>
+      <p className="mb-1 text-sm" style={{ color: 'var(--text-primary)' }}>New here?</p>
+      <p className="mb-4 text-xs" style={{ color: 'var(--text-muted)', lineHeight: 1.6 }}>
+        Load realistic demo data — a PCR protocol, samples, and voice logs.
       </p>
       <button
         onClick={handleSeed}
         disabled={loading}
-        className="flex items-center gap-2 rounded-xl bg-teal-500 px-5 py-2.5 font-semibold text-white transition hover:bg-teal-400 disabled:opacity-50"
+        className="flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition-opacity hover:opacity-80 disabled:opacity-30"
+        style={{ border: '1px solid var(--accent)', color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase' }}
       >
-        {loading ? (
-          <Loader2 size={16} className="animate-spin" />
-        ) : (
-          <Sparkles size={16} />
-        )}
-        {loading ? 'Loading demo data…' : 'Load Demo Data'}
+        {loading ? <Loader2 size={12} className="animate-spin" /> : null}
+        {loading ? 'Loading…' : 'Load Demo Data'}
       </button>
-      {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+      {error && <p className="mt-2 text-xs" style={{ color: '#f87171' }}>{error}</p>}
     </div>
   )
 }
