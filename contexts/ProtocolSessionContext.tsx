@@ -80,5 +80,18 @@ export function ProtocolSessionProvider({ children }: { children: ReactNode }) {
 export function useProtocolSession() {
   const ctx = useContext(Context)
   if (!ctx) throw new Error('useProtocolSession must be inside ProtocolSessionProvider')
-  return ctx
+
+  const { sessionState, callbacksRef } = ctx
+  const currentStep = sessionState.steps[sessionState.currentStepIndex]
+
+  return {
+    ...ctx,
+    currentStepTitle: currentStep?.title ?? '',
+    protocolName: sessionState.protocol?.name ?? '',
+    protocolId: sessionState.protocol?.id ?? '',
+    onNextStep: () => callbacksRef.current?.onNextStep(),
+    onMarkComplete: () => callbacksRef.current?.onMarkComplete(),
+    onStartTimer: () => callbacksRef.current?.onStartTimer(),
+    onPauseTimer: () => callbacksRef.current?.onPauseTimer(),
+  }
 }
