@@ -3,7 +3,6 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createServerClient } from '@supabase/auth-helpers-nextjs'
 import DashboardGreeting from '@/components/DashboardGreeting'
-import DashboardSeedButton from '@/components/DashboardSeedButton'
 import DashboardTasks from '@/components/DashboardTasks'
 import DailySummaryTrigger from '@/components/DailySummaryTrigger'
 
@@ -46,8 +45,11 @@ export default async function DashboardPage() {
       supabase.from('samples').select('id, tube_label, location, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(5),
     ])
 
-  const rawName = profile?.full_name ?? (session.user.user_metadata?.full_name as string | undefined) ?? ''
-  const firstName = rawName.split(' ')[0] || 'there'
+  const firstName =
+    profile?.full_name?.split(' ')[0] ||
+    (session.user.user_metadata?.full_name as string | undefined)?.split(' ')[0] ||
+    session.user.email?.split('@')[0] ||
+    'there'
   const hour = new Date().getUTCHours()
   const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'
 
@@ -96,7 +98,6 @@ export default async function DashboardPage() {
     weekDayMap[day.dateStr] = allSessions?.filter((s) => s.last_updated?.startsWith(day.dateStr)).reduce((acc, s) => acc + (s.completed_steps?.length ?? 0), 0) ?? 0
   }
 
-  const hasSessions = (allSessions?.length ?? 0) > 0
   const progressPct = totalStepsInProtocol > 0 ? Math.round((completedStepsDone / totalStepsInProtocol) * 100) : 0
   const lastActivity = allSessions?.[0]?.last_updated ? timeAgo(allSessions[0].last_updated) : null
 
@@ -191,11 +192,6 @@ export default async function DashboardPage() {
               >
                 Browse Protocols →
               </Link>
-              {!hasSessions && (
-                <div className="mt-2">
-                  <DashboardSeedButton />
-                </div>
-              )}
             </>
           )}
         </div>

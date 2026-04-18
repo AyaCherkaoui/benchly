@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Square,
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import { Protocol, Session, Step } from '@/types'
 
@@ -71,34 +72,23 @@ function fmtDate(iso: string) {
 export default function MeetingPage() {
   const supabase = createSupabaseBrowserClient()
 
-  // Protocol data
   const [sessions, setSessions] = useState<Session[]>([])
   const [statMap, setStatMap] = useState<Record<string, ProtocolStat>>({})
   const [workedProtocolIds, setWorkedProtocolIds] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
 
-  // Weekly reports
   const [weeklyReports, setWeeklyReports] = useState<WeeklyReport[]>([])
   const [generatingReport, setGeneratingReport] = useState(false)
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null)
   const [liveReport, setLiveReport] = useState('')
 
-  // Summary generator
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [summary, setSummary] = useState('')
   const [generating, setGenerating] = useState(false)
 
-  // Toast
-  const [toast, setToast] = useState('')
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // Notes (localStorage)
   const [notes, setNotes] = useState('')
-
-  // Current user
   const userRef = useRef<{ id: string; name: string } | null>(null)
 
-  // ─── Load ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     loadData()
     const saved = localStorage.getItem('benchly-meeting-notes')
@@ -106,9 +96,7 @@ export default function MeetingPage() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadData() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
     const { data: profileData } = await supabase
@@ -119,7 +107,7 @@ export default function MeetingPage() {
 
     userRef.current = {
       id: user.id,
-      name: profileData?.full_name?.split(' ')[0] ?? 'Lab Intern',
+      name: profileData?.full_name?.split(' ')[0] ?? 'there',
     }
 
     const { data: sessionData } = await supabase
@@ -127,7 +115,6 @@ export default function MeetingPage() {
       .select('*')
       .eq('user_id', user.id)
 
-    // Load weekly reports (gracefully handle missing table)
     try {
       const { data: reports } = await supabase
         .from('weekly_reports')
@@ -136,24 +123,15 @@ export default function MeetingPage() {
         .order('week_start', { ascending: false })
         .limit(10)
       setWeeklyReports((reports as WeeklyReport[]) ?? [])
-    } catch {
-      // Table may not exist yet
-    }
+    } catch { /* table may not exist */ }
 
-    if (!sessionData?.length) {
-      setLoading(false)
-      return
-    }
+    if (!sessionData?.length) { setLoading(false); return }
 
     const protocolIds = Array.from(new Set(sessionData.map((s) => s.protocol_id)))
 
     const [{ data: protocolData }, { data: stepsData }] = await Promise.all([
       supabase.from('protocols').select('*').in('id', protocolIds),
-      supabase
-        .from('steps')
-        .select('id, protocol_id, step_number, title, instructions')
-        .in('protocol_id', protocolIds)
-        .order('step_number'),
+      supabase.from('steps').select('id, protocol_id, step_number, title, instructions').in('protocol_id', protocolIds).order('step_number'),
     ])
 
     const map: Record<string, ProtocolStat> = {}
@@ -166,8 +144,7 @@ export default function MeetingPage() {
         protocol,
         steps: pSteps,
         completedStepNumbers: unique,
-        progressPct:
-          pSteps.length > 0 ? Math.round((unique.length / pSteps.length) * 100) : 0,
+        progressPct: pSteps.length > 0 ? Math.round((unique.length / pSteps.length) * 100) : 0,
       }
     }
 
@@ -178,8 +155,6 @@ export default function MeetingPage() {
     setLoading(false)
   }
 
-  // ─── Weekly report generation ───────────────────────────────────────────────
-
   async function generateWeeklyReport() {
     const user = userRef.current
     if (!user) return
@@ -187,126 +162,43 @@ export default function MeetingPage() {
     setLiveReport('')
 
     const { start, end } = getCurrentWeekBounds()
-    const startISO = start.toISOString()
-    const endISO = end.toISOString()
     const weekNum = getISOWeekNumber(start)
 
-    // Fetch this week's data
-    const [{ data: weekSessions }, { data: weekSamples }, { data: weekLogs }] =
-      await Promise.all([
-        supabase
-          .from('sessions')
-          .select('*, protocols(name)')
-          .eq('user_id', user.id)
-          .gte('last_updated', startISO)
-          .lte('last_updated', endISO),
-        supabase
-          .from('samples')
-          .select('tube_label, location, created_at')
-          .eq('user_id', user.id)
-          .gte('created_at', startISO)
-          .lte('created_at', endISO),
-        supabase
-          .from('voice_logs')
-          .select('transcript, action_taken, type, created_at')
-          .eq('user_id', user.id)
-          .gte('created_at', startISO)
-          .lte('created_at', endISO)
-          .limit(40),
-      ])
+    const [{ data: weekSessions }, { data: weekSamples }, { data: weekLogs }] = await Promise.all([
+      supabase.from('sessions').select('*, protocols(name)').eq('user_id', user.id).gte('last_updated', start.toISOString()).lte('last_updated', end.toISOString()),
+      supabase.from('samples').select('tube_label, location, created_at').eq('user_id', user.id).gte('created_at', start.toISOString()).lte('created_at', end.toISOString()),
+      supabase.from('voice_logs').select('transcript, action_taken, type, created_at').eq('user_id', user.id).gte('created_at', start.toISOString()).lte('created_at', end.toISOString()).limit(40),
+    ])
 
     const weekStr = `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
 
-    const message = `You are generating a weekly lab meeting report for ${user.name}, a lab intern.
+    const message = `You are generating a weekly lab meeting report for ${user.name}, a lab intern.\n\nWeek: ${weekStr}\n\nSESSIONS DATA:\n${JSON.stringify((weekSessions ?? []).map((s: Record<string, unknown>) => ({ protocol: (s.protocols as { name: string } | null)?.name ?? 'Unknown', current_step: s.current_step, completed_steps_count: (s.completed_steps as number[])?.length ?? 0, last_updated: s.last_updated })), null, 2)}\n\nSAMPLES LOGGED:\n${JSON.stringify(weekSamples ?? [], null, 2)}\n\nVOICE INTERACTIONS:\n${JSON.stringify((weekLogs ?? []).map((l: Record<string, unknown>) => ({ transcript: l.transcript, type: l.type, action: l.action_taken, date: (l.created_at as string)?.split('T')[0] })), null, 2)}\n\nGenerate a structured weekly lab report with exactly these sections:\n## Executive Summary\n## Daily Activity\n## Protocols Status\n## Sample Inventory\n## Key Observations\n## Next Steps\n\nBe specific, professional, and encouraging.`
 
-Week: ${weekStr}
-
-SESSIONS DATA:
-${JSON.stringify(
-  (weekSessions ?? []).map((s: Record<string, unknown>) => ({
-    protocol: (s.protocols as { name: string } | null)?.name ?? 'Unknown',
-    current_step: s.current_step,
-    completed_steps_count: (s.completed_steps as number[])?.length ?? 0,
-    last_updated: s.last_updated,
-  })),
-  null,
-  2
-)}
-
-SAMPLES LOGGED:
-${JSON.stringify(weekSamples ?? [], null, 2)}
-
-VOICE INTERACTIONS (observations, questions, commands):
-${JSON.stringify(
-  (weekLogs ?? []).map((l: Record<string, unknown>) => ({
-    transcript: l.transcript,
-    type: l.type,
-    action: l.action_taken,
-    date: (l.created_at as string)?.split('T')[0],
-  })),
-  null,
-  2
-)}
-
-Generate a structured weekly lab report with exactly these sections:
-## Executive Summary
-## Daily Activity
-## Protocols Status
-## Sample Inventory
-## Key Observations
-## Next Steps
-
-Be specific, professional, and encouraging. Reference actual data from above.`
-
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, currentStep: 'Weekly Lab Report' }),
-    })
+    const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message, currentStep: 'Weekly Lab Report' }) })
     const data = await res.json()
     const content: string = data.reply ?? ''
-
     setLiveReport(content)
 
-    // Save to weekly_reports (gracefully handle missing table)
     try {
-      const { data: saved } = await supabase
-        .from('weekly_reports')
-        .insert({
-          user_id: user.id,
-          week_number: weekNum,
-          week_start: start.toISOString().split('T')[0],
-          week_end: end.toISOString().split('T')[0],
-          report_content: content,
-          raw_data: { sessions: weekSessions, samples: weekSamples, voice_logs: weekLogs },
-        })
-        .select()
-        .single()
-
-      if (saved) {
-        setWeeklyReports((prev) => [saved as WeeklyReport, ...prev])
-        setExpandedReportId((saved as WeeklyReport).id)
-      }
-    } catch {
-      // Table not yet created — report still shows inline
-    }
+      const { data: saved } = await supabase.from('weekly_reports').insert({
+        user_id: user.id, week_number: weekNum,
+        week_start: start.toISOString().split('T')[0], week_end: end.toISOString().split('T')[0],
+        report_content: content,
+        raw_data: { sessions: weekSessions, samples: weekSamples, voice_logs: weekLogs },
+      }).select().single()
+      if (saved) { setWeeklyReports((prev) => [saved as WeeklyReport, ...prev]); setExpandedReportId((saved as WeeklyReport).id) }
+    } catch { /* table not yet created */ }
 
     setGeneratingReport(false)
   }
 
-  // ─── This-week stats ────────────────────────────────────────────────────────
   const cutoff = weekAgoISO()
   const thisWeekSessions = sessions.filter((s) => s.last_updated >= cutoff)
   const thisWeekProtocolIds = Array.from(new Set(thisWeekSessions.map((s) => s.protocol_id)))
-  const thisWeekSteps = thisWeekSessions.reduce(
-    (acc, s) => acc + (s.completed_steps?.length ?? 0),
-    0
-  )
+  const thisWeekSteps = thisWeekSessions.reduce((acc, s) => acc + (s.completed_steps?.length ?? 0), 0)
 
   function toggleProtocol(id: string) {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    )
+    setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
   }
 
   async function generateSummary() {
@@ -315,36 +207,15 @@ Be specific, professional, and encouraging. Reference actual data from above.`
     const details = selectedIds.map((id) => {
       const stat = statMap[id]
       if (!stat) return ''
-      const completedTitles = stat.completedStepNumbers
-        .map((n) => stat.steps.find((s) => s.step_number === n)?.title)
-        .filter(Boolean)
-        .join(', ')
+      const completedTitles = stat.completedStepNumbers.map((n) => stat.steps.find((s) => s.step_number === n)?.title).filter(Boolean).join(', ')
       return `${stat.protocol.name}: completed steps — ${completedTitles || 'none recorded'}`
     })
-    const protocolNames = selectedIds
-      .map((id) => statMap[id]?.protocol.name)
-      .filter(Boolean)
-      .join(', ')
+    const protocolNames = selectedIds.map((id) => statMap[id]?.protocol.name).filter(Boolean).join(', ')
     const message = `The user is a lab intern preparing for their weekly lab meeting. They worked on the following protocols this week: ${protocolNames}. Their completed steps include: ${details.join('; ')}. Generate a professional but friendly lab meeting summary they can present. Include: what they worked on, key steps completed, any notable observations, and suggested next steps. Keep it under 200 words and make it presentation-ready.`
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, currentStep: 'Lab Meeting Prep' }),
-    })
+    const res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message, currentStep: 'Lab Meeting Prep' }) })
     const data = await res.json()
     setSummary(data.reply ?? '')
     setGenerating(false)
-  }
-
-  function showToast(msg: string) {
-    setToast(msg)
-    if (toastTimer.current) clearTimeout(toastTimer.current)
-    toastTimer.current = setTimeout(() => setToast(''), 3000)
-  }
-
-  function copyToClipboard() {
-    if (!summary) return
-    navigator.clipboard.writeText(summary).then(() => showToast('Copied to clipboard!'))
   }
 
   function handleNotesChange(val: string) {
@@ -353,132 +224,96 @@ Be specific, professional, and encouraging. Reference actual data from above.`
   }
 
   if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-slate-400">Loading your activity…</p>
-      </div>
-    )
+    return <div className="flex h-full items-center justify-center"><p style={{ color: 'var(--text-muted)' }}>Loading…</p></div>
   }
+
+  const cardStyle = { background: 'var(--bg-card)', border: '1px solid var(--border)' }
+  const innerCardStyle = { background: '#0f0f0f', border: '1px solid var(--border)' }
 
   return (
     <div className="space-y-8">
-      {/* ── Weekly Reports ───────────────────────────────────────────────────── */}
-      <div>
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-white">Lab Meeting Prep</h1>
-            <p className="mt-1 text-sm text-slate-400">
-              Weekly reports, protocol summaries, and meeting notes
-            </p>
-          </div>
-          <button
-            onClick={generateWeeklyReport}
-            disabled={generatingReport}
-            className="flex items-center gap-2 rounded-xl bg-teal-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-400 disabled:opacity-50"
-          >
-            {generatingReport ? (
-              <Loader2 size={15} className="animate-spin" />
-            ) : (
-              <FlaskConical size={15} />
-            )}
-            {generatingReport ? 'Generating…' : "Generate This Week's Report"}
-          </button>
+      {/* ── Header + Generate ─────────────────────────────────────────────── */}
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="font-serif text-4xl font-normal" style={{ color: 'var(--text-primary)' }}>Lab Meeting</h1>
+          <p className="mt-1.5 text-sm" style={{ color: 'var(--text-muted)' }}>Weekly reports, protocol summaries, and meeting notes</p>
         </div>
-
-        {/* Live / just-generated report (before save) */}
-        {liveReport && !weeklyReports.some((r) => r.report_content === liveReport) && (
-          <div className="mb-4 rounded-2xl bg-[#152235] p-5 ring-1 ring-teal-500/30">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-teal-400">
-              New Report — This Week
-            </p>
-            <pre className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200">
-              {liveReport}
-            </pre>
-          </div>
-        )}
-
-        {/* Past weekly report cards */}
-        {weeklyReports.length > 0 ? (
-          <div className="space-y-3">
-            {weeklyReports.map((report) => {
-              const isExpanded = expandedReportId === report.id
-              return (
-                <div
-                  key={report.id}
-                  className="rounded-2xl bg-[#152235] ring-1 ring-slate-700/50"
-                >
-                  <button
-                    onClick={() => setExpandedReportId(isExpanded ? null : report.id)}
-                    className="flex w-full items-center justify-between px-5 py-4"
-                  >
-                    <div className="text-left">
-                      <p className="font-semibold text-white">
-                        Week {report.week_number} — {fmtDate(report.week_start)} to{' '}
-                        {fmtDate(report.week_end)}
-                      </p>
-                      {!isExpanded && report.report_content && (
-                        <p className="mt-0.5 line-clamp-1 text-sm text-slate-400">
-                          {report.report_content.slice(0, 120)}…
-                        </p>
-                      )}
-                    </div>
-                    {isExpanded ? (
-                      <ChevronUp size={16} className="flex-shrink-0 text-slate-400" />
-                    ) : (
-                      <ChevronDown size={16} className="flex-shrink-0 text-slate-400" />
-                    )}
-                  </button>
-
-                  {isExpanded && report.report_content && (
-                    <div className="border-t border-slate-700/50 px-5 pb-5 pt-4">
-                      <pre className="whitespace-pre-wrap text-sm leading-relaxed text-slate-200">
-                        {report.report_content}
-                      </pre>
-                      <div className="mt-4 flex gap-2">
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(report.report_content ?? '')
-                            showToast('Copied!')
-                          }}
-                          className="flex items-center gap-1.5 rounded-lg bg-slate-700 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-600"
-                        >
-                          <ClipboardCopy size={12} /> Copy
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        ) : (
-          <p className="text-sm text-slate-500">
-            No weekly reports yet.{' '}
-            {weeklyReports.length === 0 &&
-              'Run the SQL migration in supabase/migrations/20260417_weekly_reports.sql first, then generate your first report.'}
-          </p>
-        )}
+        <button
+          onClick={generateWeeklyReport}
+          disabled={generatingReport}
+          className="flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition-opacity hover:opacity-80 disabled:opacity-30"
+          style={{ background: 'var(--accent)', color: '#0a0a0a', letterSpacing: '0.08em', textTransform: 'uppercase' }}
+        >
+          {generatingReport ? <Loader2 size={12} className="animate-spin" /> : <FlaskConical size={12} />}
+          {generatingReport ? 'Generating…' : "This Week's Report"}
+        </button>
       </div>
 
-      {/* ── Original summary + notes layout ─────────────────────────────────── */}
-      <div className="flex h-full gap-6">
-        {/* Left: Summary Generator (60%) */}
+      {/* ── Live report ───────────────────────────────────────────────────── */}
+      {liveReport && !weeklyReports.some((r) => r.report_content === liveReport) && (
+        <div className="rounded-xl p-5" style={{ ...cardStyle, borderLeft: '2px solid var(--accent)' }}>
+          <p className="mb-3" style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--accent)' }}>New Report — This Week</p>
+          <pre className="whitespace-pre-wrap text-sm leading-relaxed" style={{ color: 'var(--text-secondary)', fontFamily: 'Inter, sans-serif' }}>{liveReport}</pre>
+        </div>
+      )}
+
+      {/* ── Past weekly reports ───────────────────────────────────────────── */}
+      {weeklyReports.length > 0 && (
+        <div className="space-y-3">
+          {weeklyReports.map((report) => {
+            const isExpanded = expandedReportId === report.id
+            return (
+              <div key={report.id} className="rounded-xl overflow-hidden" style={cardStyle}>
+                <button
+                  onClick={() => setExpandedReportId(isExpanded ? null : report.id)}
+                  className="flex w-full items-center justify-between px-5 py-4 transition-opacity hover:opacity-80"
+                >
+                  <div className="text-left">
+                    <p className="text-sm" style={{ color: 'var(--text-primary)' }}>
+                      Week {report.week_number} — {fmtDate(report.week_start)} to {fmtDate(report.week_end)}
+                    </p>
+                    {!isExpanded && report.report_content && (
+                      <p className="mt-0.5 line-clamp-1 text-xs" style={{ color: 'var(--text-muted)' }}>{report.report_content.slice(0, 120)}…</p>
+                    )}
+                  </div>
+                  {isExpanded
+                    ? <ChevronUp size={14} style={{ color: 'var(--text-muted)' }} />
+                    : <ChevronDown size={14} style={{ color: 'var(--text-muted)' }} />}
+                </button>
+                {isExpanded && report.report_content && (
+                  <div className="px-5 pb-5 pt-1" style={{ borderTop: '1px solid var(--border)' }}>
+                    <pre className="whitespace-pre-wrap text-sm leading-relaxed" style={{ color: 'var(--text-secondary)', fontFamily: 'Inter, sans-serif' }}>{report.report_content}</pre>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(report.report_content ?? ''); toast.success('Copied!') }}
+                      className="mt-4 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition-opacity hover:opacity-70"
+                      style={{ border: '1px solid var(--border)', color: 'var(--text-muted)', letterSpacing: '0.06em' }}
+                    >
+                      <ClipboardCopy size={11} /> Copy
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {weeklyReports.length === 0 && !liveReport && (
+        <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No weekly reports yet. Generate your first one above.</p>
+      )}
+
+      {/* ── Summary + Notes ───────────────────────────────────────────────── */}
+      <div className="flex gap-6">
+        {/* Left: Summary Generator */}
         <div className="flex w-3/5 flex-col gap-5">
           <div>
-            <h2 className="text-xl font-bold text-white">Quick Meeting Summary</h2>
-            <p className="mt-1 text-sm text-slate-400">
-              Generate a short summary to present at your lab meeting
-            </p>
+            <h2 className="font-serif text-2xl font-normal" style={{ color: 'var(--text-primary)' }}>Quick Summary</h2>
+            <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>Select protocols to generate a meeting summary</p>
           </div>
 
-          <div className="rounded-2xl bg-[#152235] p-5">
-            <p className="mb-3 text-sm font-semibold text-slate-300">
-              Select protocols to include
-            </p>
+          <div className="rounded-xl p-5" style={cardStyle}>
             {workedProtocolIds.length === 0 ? (
-              <p className="text-sm text-slate-500">
-                No protocols worked on yet — complete some steps first!
-              </p>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No protocols worked on yet — complete some steps first.</p>
             ) : (
               <div className="flex flex-col gap-2">
                 {workedProtocolIds.map((id) => {
@@ -489,23 +324,19 @@ Be specific, professional, and encouraging. Reference actual data from above.`
                     <button
                       key={id}
                       onClick={() => toggleProtocol(id)}
-                      className={`flex items-center gap-3 rounded-xl px-4 py-3 text-left transition ${
-                        checked
-                          ? 'bg-teal-500/10 ring-1 ring-teal-500/30'
-                          : 'bg-slate-800/40 ring-1 ring-slate-700/50 hover:ring-slate-600'
-                      }`}
+                      className="flex items-center gap-3 rounded-lg px-4 py-3 text-left transition-opacity hover:opacity-80"
+                      style={checked
+                        ? { background: 'rgba(232,165,152,0.06)', border: '1px solid rgba(232,165,152,0.25)' }
+                        : innerCardStyle}
                     >
-                      {checked ? (
-                        <CheckSquare size={16} className="flex-shrink-0 text-teal-400" />
-                      ) : (
-                        <Square size={16} className="flex-shrink-0 text-slate-500" />
-                      )}
-                      <span className={`text-sm font-medium ${checked ? 'text-white' : 'text-slate-400'}`}>
+                      {checked
+                        ? <CheckSquare size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                        : <Square size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
+                      <span className="text-sm" style={{ color: checked ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
                         {stat.protocol.name}
                       </span>
-                      <span className="ml-auto text-xs text-slate-500">
-                        {stat.completedStepNumbers.length} step
-                        {stat.completedStepNumbers.length !== 1 ? 's' : ''} done
+                      <span className="ml-auto text-xs" style={{ color: 'var(--text-muted)' }}>
+                        {stat.completedStepNumbers.length} step{stat.completedStepNumbers.length !== 1 ? 's' : ''}
                       </span>
                     </button>
                   )
@@ -517,16 +348,10 @@ Be specific, professional, and encouraging. Reference actual data from above.`
           <button
             onClick={generateSummary}
             disabled={generating || selectedIds.length === 0}
-            className="flex items-center justify-center gap-2 rounded-xl bg-teal-500 py-3 font-semibold text-white transition hover:bg-teal-400 disabled:opacity-50"
+            className="flex items-center justify-center gap-2 rounded-lg py-2.5 text-xs transition-opacity hover:opacity-80 disabled:opacity-30"
+            style={{ border: '1px solid var(--accent)', color: 'var(--accent)', letterSpacing: '0.08em', textTransform: 'uppercase' }}
           >
-            {generating ? (
-              <>
-                <Loader2 size={18} className="animate-spin" />
-                Generating…
-              </>
-            ) : (
-              'Generate Summary'
-            )}
+            {generating ? <><Loader2 size={12} className="animate-spin" /> Generating…</> : 'Generate Summary'}
           </button>
 
           {(summary || generating) && (
@@ -535,57 +360,51 @@ Be specific, professional, and encouraging. Reference actual data from above.`
                 value={summary}
                 onChange={(e) => setSummary(e.target.value)}
                 rows={10}
-                placeholder={generating ? 'Generating your summary…' : ''}
+                placeholder={generating ? 'Generating…' : ''}
                 disabled={generating}
-                className="resize-none rounded-2xl bg-[#152235] px-5 py-4 text-sm leading-relaxed text-slate-100 outline-none ring-2 ring-teal-500/40 placeholder-slate-500 focus:ring-teal-500/70 disabled:opacity-60"
+                className="resize-none rounded-xl px-5 py-4 text-sm leading-relaxed outline-none disabled:opacity-50"
+                style={{ background: '#0f0f0f', border: '1px solid rgba(232,165,152,0.25)', color: 'var(--text-secondary)' }}
               />
-              <div className="flex gap-3">
-                <button
-                  onClick={generateSummary}
-                  disabled={generating}
-                  className="flex items-center gap-2 rounded-xl bg-slate-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-600 disabled:opacity-50"
-                >
-                  <RefreshCw size={14} /> Regenerate
-                </button>
-                <button
-                  onClick={copyToClipboard}
-                  disabled={!summary}
-                  className="flex items-center gap-2 rounded-xl bg-slate-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-600 disabled:opacity-50"
-                >
-                  <ClipboardCopy size={14} /> Copy to Clipboard
-                </button>
-                <button
-                  onClick={() => showToast('PDF export coming soon')}
-                  className="flex items-center gap-2 rounded-xl bg-slate-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-600"
-                >
-                  <Download size={14} /> Export as PDF
-                </button>
+              <div className="flex gap-2">
+                {[
+                  { icon: RefreshCw, label: 'Regenerate', onClick: generateSummary, disabled: generating },
+                  { icon: ClipboardCopy, label: 'Copy', onClick: () => { navigator.clipboard.writeText(summary); toast.success('Copied!') }, disabled: !summary },
+                  { icon: Download, label: 'Export PDF', onClick: () => toast('PDF export coming soon'), disabled: false },
+                ].map(({ icon: Icon, label, onClick, disabled }) => (
+                  <button
+                    key={label}
+                    onClick={onClick}
+                    disabled={disabled}
+                    className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition-opacity hover:opacity-70 disabled:opacity-30"
+                    style={{ border: '1px solid var(--border)', color: 'var(--text-muted)', letterSpacing: '0.06em' }}
+                  >
+                    <Icon size={11} /> {label}
+                  </button>
+                ))}
               </div>
             </div>
           )}
         </div>
 
-        {/* Right: Activity + Notes (40%) */}
+        {/* Right: Activity + Notes */}
         <div className="flex w-2/5 flex-col gap-5">
-          <div className="rounded-2xl bg-[#152235] p-5">
+          <div className="rounded-xl p-5" style={cardStyle}>
             <div className="mb-4 flex items-center gap-2">
-              <FlaskConical size={16} className="text-teal-400" />
-              <h2 className="font-semibold text-white">This Week at a Glance</h2>
+              <FlaskConical size={14} style={{ color: 'var(--accent)' }} />
+              <h2 className="text-sm" style={{ color: 'var(--text-primary)', letterSpacing: '0.05em' }}>This Week at a Glance</h2>
             </div>
             <div className="mb-5 grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-slate-800/50 p-3">
-                <p className="text-2xl font-bold text-white">{thisWeekProtocolIds.length}</p>
-                <p className="mt-0.5 text-xs text-slate-400">
-                  Protocol{thisWeekProtocolIds.length !== 1 ? 's' : ''} worked on
-                </p>
+              <div className="rounded-lg p-3" style={innerCardStyle}>
+                <p className="font-serif text-2xl font-normal" style={{ color: 'var(--text-primary)' }}>{thisWeekProtocolIds.length}</p>
+                <p className="mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>Protocol{thisWeekProtocolIds.length !== 1 ? 's' : ''} worked on</p>
               </div>
-              <div className="rounded-xl bg-slate-800/50 p-3">
-                <p className="text-2xl font-bold text-white">{thisWeekSteps}</p>
-                <p className="mt-0.5 text-xs text-slate-400">Steps completed</p>
+              <div className="rounded-lg p-3" style={innerCardStyle}>
+                <p className="font-serif text-2xl font-normal" style={{ color: 'var(--text-primary)' }}>{thisWeekSteps}</p>
+                <p className="mt-0.5 text-xs" style={{ color: 'var(--text-muted)' }}>Steps completed</p>
               </div>
             </div>
             {workedProtocolIds.length === 0 ? (
-              <p className="text-sm text-slate-500">No activity this week yet.</p>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>No activity this week yet.</p>
             ) : (
               <div className="flex flex-col gap-4">
                 {workedProtocolIds.map((id) => {
@@ -593,19 +412,13 @@ Be specific, professional, and encouraging. Reference actual data from above.`
                   if (!stat) return null
                   return (
                     <div key={id}>
-                      <div className="mb-1.5 flex items-center justify-between text-xs">
-                        <span className="font-medium text-slate-300">{stat.protocol.name}</span>
-                        <span className="text-slate-500">
-                          {stat.completedStepNumbers.length}/{stat.steps.length} steps
-                        </span>
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>{stat.protocol.name}</span>
+                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{stat.completedStepNumbers.length}/{stat.steps.length}</span>
                       </div>
-                      <div className="h-2 rounded-full bg-slate-700">
-                        <div
-                          className="h-2 rounded-full bg-teal-500 transition-all"
-                          style={{ width: `${stat.progressPct}%` }}
-                        />
+                      <div className="h-px w-full" style={{ background: 'var(--border)' }}>
+                        <div className="h-px" style={{ width: `${stat.progressPct}%`, background: 'var(--accent)' }} />
                       </div>
-                      <p className="mt-1 text-right text-xs text-slate-500">{stat.progressPct}%</p>
                     </div>
                   )
                 })}
@@ -613,26 +426,19 @@ Be specific, professional, and encouraging. Reference actual data from above.`
             )}
           </div>
 
-          <div className="flex flex-1 flex-col rounded-2xl bg-[#152235] p-5">
-            <h2 className="mb-3 font-semibold text-white">Notes</h2>
-            <p className="mb-3 text-xs text-slate-500">
-              Jot down observations, questions, or ideas — saved locally.
-            </p>
+          <div className="flex flex-1 flex-col rounded-xl p-5" style={cardStyle}>
+            <h2 className="mb-1 text-sm" style={{ color: 'var(--text-primary)', letterSpacing: '0.05em' }}>Notes</h2>
+            <p className="mb-3 text-xs" style={{ color: 'var(--text-muted)' }}>Jot down observations or questions — saved locally.</p>
             <textarea
               value={notes}
               onChange={(e) => handleNotesChange(e.target.value)}
-              placeholder="Write anything you want to remember or mention at your meeting…"
-              className="flex-1 resize-none rounded-xl bg-[#0d1b2a] px-4 py-3 text-sm text-slate-200 outline-none placeholder-slate-600 ring-1 ring-slate-700 focus:ring-teal-500"
+              placeholder="Write anything you want to mention at your meeting…"
+              className="flex-1 resize-none rounded-lg px-4 py-3 text-sm outline-none"
+              style={{ background: '#0f0f0f', border: '1px solid var(--border)', color: 'var(--text-secondary)', minHeight: 140 }}
             />
           </div>
         </div>
       </div>
-
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-xl bg-slate-800 px-5 py-3 text-sm font-medium text-white shadow-xl ring-1 ring-slate-700">
-          {toast}
-        </div>
-      )}
     </div>
   )
 }
