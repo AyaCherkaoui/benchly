@@ -131,9 +131,9 @@ export default function SignupPage() {
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#080808', position: 'relative', overflow: 'hidden' }}>
 
-      {/* Light leak — top-left only */}
-      <div style={{ pointerEvents: 'none', position: 'absolute', top: 0, left: 0, width: 600, height: 600, background: 'conic-gradient(from 198deg at -8% -8%, rgba(232,165,152,0.18) 0deg, transparent 40deg)', zIndex: 0 }} />
-      <div style={{ pointerEvents: 'none', position: 'absolute', top: -60, left: -60, width: 320, height: 320, borderRadius: '50%', background: 'radial-gradient(circle, rgba(232,165,152,0.12) 0%, transparent 70%)', zIndex: 0 }} />
+      {/* Light leak — fixed, top-left only */}
+      <div style={{ pointerEvents: 'none', position: 'fixed', top: 0, left: 0, width: 600, height: 600, background: 'conic-gradient(from 198deg at -8% -8%, rgba(232,165,152,0.25) 0deg, transparent 40deg)', zIndex: 0 }} />
+      <div style={{ pointerEvents: 'none', position: 'fixed', top: -60, left: -60, width: 320, height: 320, borderRadius: '50%', background: 'radial-gradient(circle, rgba(232,165,152,0.20) 0%, transparent 70%)', zIndex: 0 }} />
 
       {/* ── LEFT PANEL ─────────────────────────────────────────────────────── */}
       <div
@@ -147,28 +147,20 @@ export default function SignupPage() {
           height: '100vh',
           flexDirection: 'column',
           justifyContent: 'center',
-          padding: '0 64px',
+          paddingTop: 48,
+          paddingBottom: 48,
+          paddingLeft: 64,
+          paddingRight: 64,
+          overflowY: 'auto',
           zIndex: 1,
-          borderRight: '1px solid rgba(255,255,255,0.06)',
         }}
       >
-        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 56, textDecoration: 'none' }}>
+        {/* #9 — logo: marginTop 48, marginBottom 64 */}
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 48, marginBottom: 64, textDecoration: 'none' }}>
           <span style={{ fontFamily: 'Playfair Display, serif', fontSize: 18, color: '#f0f0f0', fontWeight: 400 }}>Benchly</span>
         </Link>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 40 }}>
-          <motion.div
-            animate={{ scale: [0.95, 1.05, 0.95] }}
-            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-            style={{ width: 52, height: 52, borderRadius: '50%', border: '1px solid rgba(232,165,152,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-          >
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#e8a598', opacity: 0.6 }} />
-          </motion.div>
-          <div style={{ height: 1, width: 64, background: 'rgba(255,255,255,0.1)' }} />
-          <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.28em', color: '#555', fontFamily: 'monospace' }}>
-            Lab Co-pilot · v2.4
-          </span>
-        </div>
+        {/* #10 — Lab Co-pilot section removed entirely */}
 
         <motion.h1
           initial={{ opacity: 0, y: 44 }}
@@ -190,7 +182,7 @@ export default function SignupPage() {
           validates every entry against your protocols, and auto-logs samples the moment you speak them.
         </motion.p>
 
-        <ul style={{ marginTop: 40, display: 'flex', flexDirection: 'column', gap: 20, listStyle: 'none', padding: 0, margin: '40px 0 0' }}>
+        <ul style={{ display: 'flex', flexDirection: 'column', gap: 20, listStyle: 'none', padding: 0, margin: '40px 0 0' }}>
           {benefits.map((b, i) => (
             <motion.li
               key={b.k}
@@ -216,22 +208,21 @@ export default function SignupPage() {
             Trusted by 240+ labs · SOC2 in progress
           </span>
         </div>
+
+        {/* #2 — gradient divider replaces borderRight */}
+        <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 1, background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.08) 30%, rgba(255,255,255,0.08) 70%, transparent)' }} />
       </div>
 
       {/* ── RIGHT PANEL ────────────────────────────────────────────────────── */}
+      {/* #4 — paddingLeft/Right 80 on the panel */}
       <div
         style={{
           flex: 1,
           background: '#0d0d0d',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'flex-start',
-          padding: '80px 40px 120px',
+          paddingLeft: 80,
+          paddingRight: 80,
           zIndex: 1,
           position: 'relative',
-          overflowY: 'auto',
-          minHeight: '100vh',
         }}
       >
         {/* Mobile header */}
@@ -239,25 +230,16 @@ export default function SignupPage() {
           <span style={{ fontFamily: 'Playfair Display, serif', fontSize: 16, color: '#f0f0f0' }}>Benchly</span>
         </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-          style={{ width: '100%', maxWidth: 440, position: 'relative', marginTop: 40 }}
-        >
-          {/* Rotating gradient border */}
-          <div style={{ position: 'relative', borderRadius: 14 }}>
-            <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ duration: 9, repeat: Infinity, ease: 'linear' }}
-              style={{
-                position: 'absolute', inset: -1, borderRadius: 14, zIndex: 0,
-                background: 'conic-gradient(from 0deg, transparent 0deg, rgba(232,165,152,0.6) 60deg, transparent 120deg, transparent 360deg)',
-              }}
-            />
-
-            {/* Card */}
-            <div style={{ position: 'relative', zIndex: 1, background: '#111111', borderRadius: 13, padding: '36px 36px 40px' }}>
+        {/* #6 — inner centering wrapper */}
+        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 80, paddingBottom: 140 }}>
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+            style={{ width: '100%', maxWidth: 440, position: 'relative', marginLeft: 'auto', marginRight: 'auto' }}
+          >
+            {/* #1 — static card, rotating gradient border removed */}
+            <div style={{ background: '#111111', borderRadius: 13, border: '1px solid rgba(232,165,152,0.15)', padding: '36px 36px 40px' }}>
 
               {/* Two-step progress bar */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 24 }}>
@@ -357,26 +339,10 @@ export default function SignupPage() {
                   </motion.button>
                 </motion.div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
-                  <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.24em', color: '#444', fontFamily: 'monospace' }}>or</span>
-                  <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
-                </div>
+                {/* #11 — "or" divider and Google button removed */}
 
-                <button
-                  type="button"
-                  style={{
-                    width: '100%', height: 44, borderRadius: 8,
-                    border: '1px solid rgba(255,255,255,0.1)', background: 'transparent',
-                    color: 'rgba(255,255,255,0.7)',
-                    fontFamily: 'monospace', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.22em',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Continue with Google
-                </button>
-
-                <p style={{ textAlign: 'center', fontSize: 12, margin: 0, color: '#555' }}>
+                {/* #7 — marginBottom 24 on last form element */}
+                <p style={{ textAlign: 'center', fontSize: 12, margin: 0, marginBottom: 24, color: '#555' }}>
                   Already have an account?{' '}
                   <Link href="/login" style={{ color: '#f0f0f0', textDecoration: 'underline', textUnderlineOffset: 4 }}>
                     Sign in
@@ -384,8 +350,8 @@ export default function SignupPage() {
                 </p>
               </form>
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
+        </div>
       </div>
 
       {/* ── FIXED FOOTER ───────────────────────────────────────────────────── */}
