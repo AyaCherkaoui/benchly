@@ -123,7 +123,7 @@ export default function SignupPage() {
       <div
         className="hidden lg:flex"
         style={{
-          width: '44%',
+          width: '50%',
           minWidth: 0,
           background: '#080808',
           position: 'sticky',
@@ -183,21 +183,15 @@ export default function SignupPage() {
           ))}
         </ul>
 
-        <div style={{ marginTop: 52, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ height: 6, width: 6, borderRadius: '50%', background: '#e8a598', display: 'inline-block' }} />
-          <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.24em', color: '#555', fontFamily: 'monospace' }}>
-            Trusted by 240+ labs · SOC2 in progress
-          </span>
-        </div>
       </div>
 
       {/* ── RIGHT PANEL ────────────────────────────────────────────────────── */}
       <div
         style={{
-          flex: 1,
+          width: '50%',
           background: '#0f0f0f',
-          paddingLeft: 100,
-          paddingRight: 100,
+          paddingLeft: 80,
+          paddingRight: 80,
           zIndex: 1,
           position: 'relative',
         }}
@@ -212,7 +206,7 @@ export default function SignupPage() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            style={{ maxWidth: 440, position: 'relative' }}
+            style={{ width: '100%', maxWidth: 520, position: 'relative' }}
           >
             <div style={{ background: '#111111', borderRadius: 13, padding: '36px 36px 40px' }}>
 
@@ -293,22 +287,6 @@ export default function SignupPage() {
         </div>
       </div>
 
-      {/* ── FIXED FOOTER ───────────────────────────────────────────────────── */}
-      <footer style={{
-        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 10,
-        borderTop: '1px solid rgba(255,255,255,0.06)',
-        backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
-        background: 'rgba(8,8,8,0.85)',
-        padding: '16px 48px',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      }}>
-        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.24em', color: '#444', fontFamily: 'monospace' }}>
-          © Benchly · Lab Notebook
-        </span>
-        <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.24em', color: '#444', fontFamily: 'monospace' }}>
-          Privacy · Terms
-        </span>
-      </footer>
 
     </div>
   )
