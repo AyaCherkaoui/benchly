@@ -7,11 +7,9 @@ import {
   CheckCircle,
   ChevronRight,
   Circle,
-  MessageCircle,
 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import Timer, { TimerHandle } from '@/components/Timer'
-import AIChat from '@/components/AIChat'
 import { useProtocolSession } from '@/contexts/ProtocolSessionContext'
 import { Protocol, Step } from '@/types'
 
@@ -27,7 +25,6 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
   const [completedSteps, setCompletedSteps] = useState<number[]>([])
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [protocolComplete, setProtocolComplete] = useState(false)
-  const [chatOpen, setChatOpen] = useState(false)
   const [savedIndicator, setSavedIndicator] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -342,21 +339,6 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
         </button>
       </div>
 
-      {/* ── Floating AI chat button ──────────────────────────────────────── */}
-      <button
-        onClick={() => setChatOpen((o) => !o)}
-        className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-teal-500 shadow-lg transition hover:bg-teal-400"
-        aria-label="Open AI assistant"
-      >
-        <MessageCircle size={24} className="text-white" />
-      </button>
-
-      {/* ── AI Chat panel ────────────────────────────────────────────────── */}
-      <AIChat
-        currentStep={currentStep.title}
-        open={chatOpen}
-        onClose={() => setChatOpen(false)}
-      />
     </div>
   )
 }

@@ -2,6 +2,7 @@
 
 import Navbar from '@/components/Navbar'
 import BenchlyBar from '@/components/BenchlyBar'
+import AIChat from '@/components/AIChat'
 import { ProtocolSessionProvider } from '@/contexts/ProtocolSessionContext'
 
 /**
@@ -16,6 +17,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <Navbar />
         <main className="flex-1 p-8 text-white">{children}</main>
       </div>
+      <AIChat />
     </ProtocolSessionProvider>
   )
 }
