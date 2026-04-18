@@ -1,24 +1,21 @@
 'use client'
 
-import Sidebar from '@/components/Sidebar'
-import HandsFreeMode from '@/components/HandsFreeMode'
+import Navbar from '@/components/Navbar'
+import BenchlyBar from '@/components/BenchlyBar'
 import { ProtocolSessionProvider } from '@/contexts/ProtocolSessionContext'
 
 /**
- * Client shell that provides the ProtocolSessionContext and renders the
- * app chrome (sidebar + HandsFreeMode bubble).  The layout.tsx (server
- * component) delegates its visual structure here so it can stay a server
- * component and keep the auth redirect logic.
+ * Client shell that provides ProtocolSessionContext and renders the
+ * app chrome: BenchlyBar (top) → Navbar → page content.
  */
 export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <ProtocolSessionProvider>
-      <div className="flex min-h-screen bg-[#0d1b2a]">
-        <Sidebar />
+      <div className="flex min-h-screen flex-col bg-[#0d1b2a]">
+        <BenchlyBar />
+        <Navbar />
         <main className="flex-1 p-8 text-white">{children}</main>
       </div>
-      {/* HandsFreeMode is fixed-position and lives outside the flex layout */}
-      <HandsFreeMode />
     </ProtocolSessionProvider>
   )
 }

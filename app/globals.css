@@ -25,3 +25,21 @@ body {
     text-wrap: balance;
   }
 }
+
+@keyframes wave {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
+
+@keyframes wave-fast {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1.2); }
+}
+
+.animate-wave {
+  animation: wave 1.2s ease-in-out infinite;
+}
+
+.animate-wave-fast {
+  animation: wave-fast 0.6s ease-in-out infinite;
+}

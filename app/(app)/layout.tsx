@@ -26,5 +26,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect('/login')
   }
 
+  // Check onboarding status — redirect if not completed
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('onboarding_complete')
+    .eq('id', session.user.id)
+    .maybeSingle()
+
+  // Only redirect if profile exists and explicitly has onboarding_complete = false
+  if (profile && profile.onboarding_complete === false) {
+    redirect('/onboarding')
+  }
+
   return <AppShell>{children}</AppShell>
 }

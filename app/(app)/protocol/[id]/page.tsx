@@ -325,7 +325,6 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
             key={currentStep.id}
             ref={timerRef}
             seconds={currentStep.timer_seconds!}
-            autoStart
             onComplete={notifyTimerComplete}
           />
         )}

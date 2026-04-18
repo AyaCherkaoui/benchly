@@ -7,7 +7,28 @@
  *   3. Cancel the browser preview and play the full audio once it arrives.
  *   4. If ElevenLabs fails, cancel the preview and speak the full text via
  *      browser TTS as a fallback so the mode never goes silent.
+ *
+ * stopSpeaking() — cancels all active audio immediately (speechSynthesis + AudioContext).
  */
+
+// Module-level ref to the currently playing AudioContext source node
+let currentSource: AudioBufferSourceNode | null = null
+let currentAudioCtx: AudioContext | null = null
+
+export function stopSpeaking(): void {
+  if (typeof window !== 'undefined') {
+    window.speechSynthesis.cancel()
+  }
+  if (currentSource) {
+    try { currentSource.stop() } catch { /* already stopped */ }
+    currentSource = null
+  }
+  if (currentAudioCtx) {
+    try { currentAudioCtx.close() } catch { /* ignore */ }
+    currentAudioCtx = null
+  }
+}
+
 export async function speakText(text: string): Promise<void> {
   if (!text) return
 
@@ -41,10 +62,19 @@ export async function speakText(text: string): Promise<void> {
     const source = audioCtx.createBufferSource()
     source.buffer = audioBuffer
     source.connect(audioCtx.destination)
+
+    // Store refs so stopSpeaking() can cancel
+    currentAudioCtx = audioCtx
+    currentSource = source
+
     source.start(0)
 
     return new Promise((resolve) => {
-      source.onended = () => resolve()
+      source.onended = () => {
+        currentSource = null
+        currentAudioCtx = null
+        resolve()
+      }
     })
   } catch {
     // ElevenLabs failed — speak full text via browser TTS

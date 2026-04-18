@@ -9,32 +9,36 @@ export interface TimerHandle {
 
 interface TimerProps {
   seconds: number
-  autoStart?: boolean
   onComplete?: () => void
 }
 
 const Timer = forwardRef<TimerHandle, TimerProps>(function Timer(
-  { seconds, autoStart = false, onComplete },
+  { seconds, onComplete },
   ref
 ) {
   const [timeLeft, setTimeLeft] = useState(seconds)
-  const [running, setRunning] = useState(autoStart)
+  const [running, setRunning] = useState(false)
+  const [started, setStarted] = useState(false)
   const [done, setDone] = useState(false)
   const onCompleteRef = useRef(onComplete)
   onCompleteRef.current = onComplete
 
   // Expose start() and pause() to parent via ref
   useImperativeHandle(ref, () => ({
-    start() { setRunning(true) },
+    start() {
+      setStarted(true)
+      setRunning(true)
+    },
     pause() { setRunning(false) },
   }))
 
   // Reset fully when the step changes (seconds prop changes)
   useEffect(() => {
     setTimeLeft(seconds)
-    setRunning(autoStart)
+    setRunning(false)
+    setStarted(false)
     setDone(false)
-  }, [seconds, autoStart])
+  }, [seconds])
 
   useEffect(() => {
     if (!running) return
@@ -78,6 +82,29 @@ const Timer = forwardRef<TimerHandle, TimerProps>(function Timer(
     )
   }
 
+  // Not yet started — show prompt card
+  if (!started) {
+    const totalMins = Math.round(seconds / 60)
+    return (
+      <div className="flex items-center justify-between rounded-xl bg-slate-800/50 px-5 py-4">
+        <div>
+          <p className="text-sm text-slate-400">
+            This step has a {totalMins} minute timer.
+          </p>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Say "start timer" or click when ready.
+          </p>
+        </div>
+        <button
+          onClick={() => { setStarted(true); setRunning(true) }}
+          className="rounded-lg bg-teal-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-teal-400"
+        >
+          Start Timer
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="flex items-center gap-5 rounded-xl bg-slate-800/50 px-5 py-4">
       <span className="font-mono text-4xl font-bold tabular-nums text-white">
@@ -91,7 +118,7 @@ const Timer = forwardRef<TimerHandle, TimerProps>(function Timer(
           {running ? 'Pause' : 'Resume'}
         </button>
         <button
-          onClick={() => { setTimeLeft(seconds); setRunning(false); setDone(false) }}
+          onClick={() => { setTimeLeft(seconds); setRunning(false); setStarted(false); setDone(false) }}
           className="rounded-lg bg-slate-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-500"
         >
           Reset
