@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { X, FlaskConical, Beaker, GraduationCap, BookOpen, Microscope, BarChart2, UserCheck } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
@@ -60,6 +60,20 @@ export default function OnboardingPage() {
   const router = useRouter()
   const supabase = createSupabaseBrowserClient()
   const [step, setStep] = useState(1)
+
+  useEffect(() => {
+    async function guard() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { router.replace('/login'); return }
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('onboarding_complete')
+        .eq('id', user.id)
+        .single()
+      if (profile?.onboarding_complete === true) router.replace('/dashboard')
+    }
+    guard()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
