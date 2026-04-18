@@ -185,8 +185,6 @@ export default function LoginPage() {
           </span>
         </div>
 
-        {/* Gradient divider replaces borderRight */}
-        <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 1, background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.08) 30%, rgba(255,255,255,0.08) 70%, transparent)' }} />
       </div>
 
       {/* ── RIGHT PANEL ────────────────────────────────────────────────────── */}
@@ -194,8 +192,8 @@ export default function LoginPage() {
         style={{
           flex: 1,
           background: '#0f0f0f',
-          paddingLeft: 60,
-          paddingRight: 60,
+          paddingLeft: 100,
+          paddingRight: 100,
           zIndex: 1,
           position: 'relative',
         }}
@@ -211,7 +209,7 @@ export default function LoginPage() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            style={{ width: '100%', maxWidth: 500, position: 'relative' }}
+            style={{ maxWidth: 440, position: 'relative' }}
           >
             {/* Static card — rotating gradient border removed */}
             <div style={{ background: '#111111', borderRadius: 13, padding: '36px 36px 40px' }}>

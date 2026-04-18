@@ -4,10 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
-import {
-  FlaskConical, Microscope, GraduationCap, BarChart2, Beaker, BookOpen,
-  ArrowUpRight, Mail, Lock, User, Check,
-} from 'lucide-react'
+import { ArrowUpRight, Mail, Lock, User, Check } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 
 function playSound(freq: number, duration: number, volume = 0.03) {
@@ -22,15 +19,6 @@ function playSound(freq: number, duration: number, volume = 0.03) {
     osc.start(); osc.stop(ctx.currentTime + duration)
   } catch { /* ignore */ }
 }
-
-const ROLES = [
-  { value: 'intern', label: 'Intern', Icon: FlaskConical },
-  { value: 'lab_assistant', label: 'Lab Assistant', Icon: Beaker },
-  { value: 'phd', label: 'PhD Student', Icon: GraduationCap },
-  { value: 'masters', label: 'Masters', Icon: BookOpen },
-  { value: 'postdoc', label: 'Postdoc', Icon: Microscope },
-  { value: 'pi', label: 'PI', Icon: BarChart2 },
-]
 
 const benefits = [
   { k: 'Hands-free voice capture', d: 'Log samples & protocols mid-pipette.' },
@@ -99,8 +87,6 @@ export default function SignupPage() {
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [labName, setLabName] = useState('')
-  const [role, setRole] = useState('intern')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -118,8 +104,6 @@ export default function SignupPage() {
     const { error: profileError } = await supabase.from('profiles').insert({
       id: signInData.user.id,
       full_name: fullName,
-      role,
-      lab_name: labName,
       onboarding_complete: false,
     })
     if (profileError) { playSound(200, 0.3, 0.04); setError(profileError.message); setLoading(false); return }
@@ -155,12 +139,9 @@ export default function SignupPage() {
           zIndex: 1,
         }}
       >
-        {/* #9 — logo: marginTop 48, marginBottom 64 */}
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 0, marginBottom: 48, textDecoration: 'none' }}>
           <span style={{ fontFamily: 'Playfair Display, serif', fontSize: 18, color: '#f0f0f0', fontWeight: 400 }}>Benchly</span>
         </Link>
-
-        {/* #10 — Lab Co-pilot section removed entirely */}
 
         <motion.h1
           initial={{ opacity: 0, y: 44 }}
@@ -208,19 +189,15 @@ export default function SignupPage() {
             Trusted by 240+ labs · SOC2 in progress
           </span>
         </div>
-
-        {/* #2 — gradient divider replaces borderRight */}
-        <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 1, background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.08) 30%, rgba(255,255,255,0.08) 70%, transparent)' }} />
       </div>
 
       {/* ── RIGHT PANEL ────────────────────────────────────────────────────── */}
-      {/* #4 — paddingLeft/Right 80 on the panel */}
       <div
         style={{
           flex: 1,
           background: '#0f0f0f',
-          paddingLeft: 60,
-          paddingRight: 60,
+          paddingLeft: 100,
+          paddingRight: 100,
           zIndex: 1,
           position: 'relative',
         }}
@@ -230,15 +207,13 @@ export default function SignupPage() {
           <span style={{ fontFamily: 'Playfair Display, serif', fontSize: 16, color: '#f0f0f0' }}>Benchly</span>
         </div>
 
-        {/* #6 — inner centering wrapper */}
         <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 80, paddingBottom: 140 }}>
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
-            style={{ width: '100%', maxWidth: 500, position: 'relative' }}
+            style={{ maxWidth: 440, position: 'relative' }}
           >
-            {/* #1 — static card, rotating gradient border removed */}
             <div style={{ background: '#111111', borderRadius: 13, padding: '36px 36px 40px' }}>
 
               {/* Two-step progress bar */}
@@ -263,38 +238,6 @@ export default function SignupPage() {
                 <Field icon={<User style={{ height: 14, width: 14 }} />} label="Full name" type="text" value={fullName} onChange={setFullName} placeholder="Dr. Ada Lovelace" delay={0.2} />
                 <Field icon={<Mail style={{ height: 14, width: 14 }} />} label="Work email" type="email" value={email} onChange={setEmail} placeholder="ada@yourlab.org" delay={0.26} />
                 <Field icon={<Lock style={{ height: 14, width: 14 }} />} label="Password" type="password" value={password} onChange={setPassword} placeholder="••••••••" delay={0.32} />
-                <Field icon={<FlaskConical style={{ height: 14, width: 14 }} />} label="Lab name" type="text" value={labName} onChange={setLabName} placeholder="e.g. Kaplan Lab" delay={0.38} />
-
-                {/* Role cards */}
-                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.44 }}>
-                  <p style={{ fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#555', marginBottom: 10, fontFamily: 'monospace' }}>
-                    Your role
-                  </p>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                    {ROLES.map(({ value, label, Icon }) => {
-                      const selected = role === value
-                      return (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() => { setRole(value); playSound(600, 0.06, 0.02) }}
-                          style={{
-                            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                            gap: 6, padding: '12px 8px',
-                            background: selected ? 'rgba(232,165,152,0.08)' : 'transparent',
-                            border: `1px solid ${selected ? '#e8a598' : 'rgba(255,255,255,0.08)'}`,
-                            borderRadius: 10, cursor: 'pointer',
-                            transform: selected ? 'scale(1.03)' : 'scale(1)',
-                            transition: 'all 150ms ease',
-                          }}
-                        >
-                          <Icon size={18} color={selected ? '#e8a598' : '#555555'} />
-                          <span style={{ fontSize: 11, color: selected ? '#e8a598' : '#555555', letterSpacing: '0.04em' }}>{label}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </motion.div>
 
                 {error && (
                   <motion.p
@@ -306,8 +249,7 @@ export default function SignupPage() {
                   </motion.p>
                 )}
 
-                {/* Submit with shimmer sweep */}
-                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.52 }}>
+                <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
                   <motion.button
                     type="submit"
                     disabled={loading}
@@ -339,9 +281,6 @@ export default function SignupPage() {
                   </motion.button>
                 </motion.div>
 
-                {/* #11 — "or" divider and Google button removed */}
-
-                {/* #7 — marginBottom 24 on last form element */}
                 <p style={{ textAlign: 'center', fontSize: 12, margin: 0, marginBottom: 24, color: '#555' }}>
                   Already have an account?{' '}
                   <Link href="/login" style={{ color: '#f0f0f0', textDecoration: 'underline', textUnderlineOffset: 4 }}>
