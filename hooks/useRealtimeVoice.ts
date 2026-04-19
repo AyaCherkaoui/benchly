@@ -226,16 +226,11 @@ PROACTIVE BEHAVIOR:
     try {
       setError(null)
 
-      // Get mic permission first so the ephemeral token (60s TTL) doesn't expire waiting on the prompt
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-
-      const tokenRes = await fetch('/api/realtime-token')
-      if (!tokenRes.ok) throw new Error('Failed to get realtime token')
-      const { client_secret } = await tokenRes.json()
-
+      // 1. Set up peer connection
       const pc = new RTCPeerConnection()
       pcRef.current = pc
 
+      // 2. Set up audio output
       const audio = new Audio()
       audio.autoplay = true
       audio.style.display = 'none'
@@ -246,9 +241,13 @@ PROACTIVE BEHAVIOR:
         audio.srcObject = e.streams[0]
         audio.play().catch(err => console.error('[Realtime] Audio play error:', err))
       }
+
+      // 3. Add microphone — prompt user before creating offer so they're not waiting after token fetch
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       mediaStreamRef.current = stream
       stream.getTracks().forEach(track => pc.addTrack(track, stream))
 
+      // 4. Set up data channel + handlers
       const dc = pc.createDataChannel('oai-events')
       dcRef.current = dc
 
@@ -494,16 +493,30 @@ PROACTIVE BEHAVIOR:
         }
       }
 
+      // 5. Create offer
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
 
+      // 6. Fetch token RIGHT before SDP exchange — minimizes time between receipt and use
+      console.log('[Realtime] Fetching ephemeral token...')
+      const tokenRes = await fetch('/api/realtime-token')
+      if (!tokenRes.ok) {
+        const errText = await tokenRes.text()
+        throw new Error(`Token fetch failed: ${tokenRes.status} ${errText}`)
+      }
+      const tokenData = await tokenRes.json()
+      const ephemeralKey = tokenData.client_secret?.value
+      if (!ephemeralKey) throw new Error(`No ephemeral key in response: ${JSON.stringify(tokenData)}`)
+      console.log('[Realtime] Token received, connecting...')
+
+      // 7. SDP exchange immediately after token
       const sdpRes = await fetch(
-        'https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview',
+        'https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17',
         {
           method: 'POST',
           body: offer.sdp,
           headers: {
-            Authorization: `Bearer ${client_secret.value}`,
+            Authorization: `Bearer ${ephemeralKey}`,
             'Content-Type': 'application/sdp',
           },
         }
@@ -521,6 +534,8 @@ PROACTIVE BEHAVIOR:
       console.error('[Realtime] Connection error:', err)
       setError(err instanceof Error ? err.message : 'Failed to connect')
       setVoiceState('idle')
+      mediaStreamRef.current?.getTracks().forEach(t => t.stop())
+      if (pcRef.current) { pcRef.current.close(); pcRef.current = null }
     }
   }, [getSystemPrompt, handleFunctionCall]) // eslint-disable-line react-hooks/exhaustive-deps
 

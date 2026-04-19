@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRealtimeVoice } from '@/hooks/useRealtimeVoice'
 import { useProtocolSession } from '@/contexts/ProtocolSessionContext'
@@ -11,6 +11,7 @@ export default function BenchlyMic() {
   const { currentStepTitle, protocolName, protocolId, onNextStep, onMarkComplete, onStartTimer, onPauseTimer } = useProtocolSession()
   const [hovered, setHovered] = useState(false)
   const [userName, setUserName] = useState('')
+  const [isWakeListening, setIsWakeListening] = useState(false)
 
   const supabase = createSupabaseBrowserClient()
 
@@ -44,6 +45,88 @@ export default function BenchlyMic() {
     onStartTimer,
     onPauseTimer,
   })
+
+  // Keep a stable ref to connect so the wake word effect doesn't restart on every render
+  const connectRef = useRef(connect)
+  useEffect(() => { connectRef.current = connect }, [connect])
+
+  // Always-on wake word listener — runs independently of the Realtime connection
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SpeechRecognition) return
+
+    if (isConnected) {
+      setIsWakeListening(false)
+      return
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let wakeRecognition: any = null
+    let isWakeActive = false
+    let cancelled = false
+
+    const startWakeListener = () => {
+      if (cancelled || isWakeActive) return
+
+      wakeRecognition = new SpeechRecognition()
+      wakeRecognition.continuous = false
+      wakeRecognition.interimResults = false
+      wakeRecognition.lang = 'en-US'
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      wakeRecognition.onresult = (event: any) => {
+        const text = event.results[0][0].transcript.toLowerCase()
+        console.log('[Wake] Heard:', text)
+
+        if (
+          text.includes('hey benchly') ||
+          text.includes('hi benchly') ||
+          text.includes('hello benchly') ||
+          text.startsWith('benchly') ||
+          text.includes('hey bently') ||
+          text.includes('hey bentley')
+        ) {
+          console.log('[Wake] Wake word detected — connecting...')
+          connectRef.current()
+        }
+      }
+
+      wakeRecognition.onend = () => {
+        isWakeActive = false
+        setIsWakeListening(false)
+        if (!cancelled) setTimeout(startWakeListener, 300)
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      wakeRecognition.onerror = (e: any) => {
+        isWakeActive = false
+        setIsWakeListening(false)
+        if (cancelled) return
+        const delay = (e.error !== 'no-speech' && e.error !== 'aborted') ? 1000 : 300
+        setTimeout(startWakeListener, delay)
+      }
+
+      try {
+        wakeRecognition.start()
+        isWakeActive = true
+        setIsWakeListening(true)
+      } catch {
+        isWakeActive = false
+      }
+    }
+
+    const timer = setTimeout(startWakeListener, 1000)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+      wakeRecognition?.abort()
+      setIsWakeListening(false)
+    }
+  }, [isConnected])
 
   const handleToggle = () => {
     if (isConnected) disconnect()
@@ -103,6 +186,21 @@ export default function BenchlyMic() {
       {/* Button + waves container */}
       <div style={{ position: 'relative', width: 56, height: 56 }}>
 
+        {/* Wake word breathing ring */}
+        {isWakeListening && !isConnected && (
+          <motion.div
+            animate={{ scale: [1, 1.18, 1], opacity: [0.08, 0.2, 0.08] }}
+            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+            style={{
+              position: 'absolute',
+              inset: -5,
+              borderRadius: '50%',
+              border: '1px solid rgba(255,255,255,0.35)',
+              pointerEvents: 'none',
+            }}
+          />
+        )}
+
         {/* Speaking rings */}
         {voiceState === 'speaking' && isConnected && [0, 1].map(i => (
           <motion.div
@@ -157,12 +255,20 @@ export default function BenchlyMic() {
               : voiceState === 'speaking' ? '#e8a598'
               : voiceState === 'thinking' ? '#f59e0b'
               : '#333'
-              : '#333',
-            scale: voiceState === 'listening' && isConnected ? [0.96, 1.04, 0.96] : 1,
+              : isWakeListening ? '#4a4a4a' : '#333',
+            scale: voiceState === 'listening' && isConnected
+              ? [0.96, 1.04, 0.96]
+              : isWakeListening && !isConnected
+              ? [0.99, 1.01, 0.99]
+              : 1,
           }}
           transition={{
             borderColor: { duration: 0.3 },
-            scale: { duration: 0.9, repeat: Infinity, ease: 'easeInOut' },
+            scale: {
+              duration: isWakeListening && !isConnected ? 3 : 0.9,
+              repeat: Infinity,
+              ease: 'easeInOut',
+            },
           }}
           style={{
             width: 56,
@@ -211,6 +317,29 @@ export default function BenchlyMic() {
           }}
         />
       </div>
+
+      {/* Wake word hint */}
+      <AnimatePresence>
+        {isWakeListening && !isConnected && !hovered && (
+          <motion.div
+            initial={{ opacity: 0, y: -2 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -2 }}
+            transition={{ duration: 0.4 }}
+            style={{
+              fontSize: 9,
+              color: '#3a3a3a',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              whiteSpace: 'nowrap',
+              userSelect: 'none',
+              pointerEvents: 'none',
+            }}
+          >
+            say hey benchly
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Error display */}
       {error && (
