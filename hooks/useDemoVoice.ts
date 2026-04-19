@@ -17,6 +17,18 @@ interface UseDemoVoiceOptions {
   onPauseTimer?: () => void
 }
 
+function speakBrowser(text: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) { resolve(); return }
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.rate = 1.05
+    utterance.onend = () => resolve()
+    utterance.onerror = () => resolve()
+    window.speechSynthesis.speak(utterance)
+  })
+}
+
 export function useDemoVoice(options: UseDemoVoiceOptions = {}) {
   const [voiceState, setVoiceState] = useState<VoiceState>('idle')
   const [isConnected, setIsConnected] = useState(false)
@@ -143,16 +155,6 @@ RESPONSE RULES:
     await speakBrowser(text)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const speakBrowser = (text: string): Promise<void> =>
-    new Promise((resolve) => {
-      if (typeof window === 'undefined' || !window.speechSynthesis) { resolve(); return }
-      window.speechSynthesis.cancel()
-      const utterance = new SpeechSynthesisUtterance(text)
-      utterance.rate = 1.05
-      utterance.onend = () => resolve()
-      utterance.onerror = () => resolve()
-      window.speechSynthesis.speak(utterance)
-    })
 
   const startListening = useCallback(() => {
     if (!isConnectedRef.current || isProcessingRef.current) return
