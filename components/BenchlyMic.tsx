@@ -30,6 +30,7 @@ export default function BenchlyMic() {
   const {
     voiceState,
     isConnected,
+    error,
     connect,
     disconnect,
   } = useRealtimeVoice({
@@ -210,6 +211,26 @@ export default function BenchlyMic() {
           }}
         />
       </div>
+
+      {/* Error display */}
+      {error && (
+        <div style={{
+          position: 'absolute',
+          top: 64,
+          right: 0,
+          background: '#2a1111',
+          border: '1px solid #f87171',
+          borderRadius: 8,
+          padding: '6px 10px',
+          fontSize: 11,
+          color: '#f87171',
+          whiteSpace: 'nowrap',
+          maxWidth: 220,
+          whiteSpace: 'pre-wrap' as const,
+        }}>
+          {error}
+        </div>
+      )}
     </div>
   )
 }

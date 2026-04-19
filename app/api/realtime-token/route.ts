@@ -9,7 +9,7 @@ export async function GET() {
     },
     body: JSON.stringify({
       model: 'gpt-4o-realtime-preview-2024-12-17',
-      voice: 'nova',
+      voice: 'shimmer',
     }),
   })
 
