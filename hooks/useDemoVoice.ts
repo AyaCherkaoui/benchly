@@ -115,6 +115,45 @@ RESPONSE RULES:
     }
   }, [router, supabase, options]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const speakText = useCallback(async (text: string): Promise<void> => {
+    // Try ElevenLabs first, fall back to browser speech synthesis
+    try {
+      const speakRes = await fetch('/api/demo-speak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      })
+
+      if (speakRes.ok) {
+        const blob = await speakRes.blob()
+        const url = URL.createObjectURL(blob)
+        await new Promise<void>((resolve) => {
+          const audio = document.createElement('audio')
+          audio.src = url
+          document.body.appendChild(audio)
+          audio.onended = () => { URL.revokeObjectURL(url); audio.remove(); resolve() }
+          audio.onerror = () => { URL.revokeObjectURL(url); audio.remove(); speakBrowser(text).then(resolve) }
+          audio.play().catch(() => { audio.remove(); URL.revokeObjectURL(url); speakBrowser(text).then(resolve) })
+        })
+        return
+      }
+    } catch {
+      // fall through to browser TTS
+    }
+    await speakBrowser(text)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const speakBrowser = (text: string): Promise<void> =>
+    new Promise((resolve) => {
+      if (typeof window === 'undefined' || !window.speechSynthesis) { resolve(); return }
+      window.speechSynthesis.cancel()
+      const utterance = new SpeechSynthesisUtterance(text)
+      utterance.rate = 1.05
+      utterance.onend = () => resolve()
+      utterance.onerror = () => resolve()
+      window.speechSynthesis.speak(utterance)
+    })
+
   const startListening = useCallback(() => {
     if (!isConnectedRef.current || isProcessingRef.current) return
 
@@ -181,36 +220,11 @@ RESPONSE RULES:
       if (response) {
         historyRef.current.push({ role: 'assistant', content: response })
         setVoiceState('speaking')
-
-        const speakRes = await fetch('/api/demo-speak', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: response }),
-        })
-
-        if (speakRes.ok) {
-          const blob = await speakRes.blob()
-          const url = URL.createObjectURL(blob)
-          const audio = new Audio(url)
-          audio.onended = () => {
-            URL.revokeObjectURL(url)
-            isProcessingRef.current = false
-            if (isConnectedRef.current) startListening()
-          }
-          audio.onerror = () => {
-            URL.revokeObjectURL(url)
-            isProcessingRef.current = false
-            if (isConnectedRef.current) startListening()
-          }
-          await audio.play()
-        } else {
-          isProcessingRef.current = false
-          if (isConnectedRef.current) startListening()
-        }
-      } else {
-        isProcessingRef.current = false
-        if (isConnectedRef.current) startListening()
+        await speakText(response)
       }
+
+      isProcessingRef.current = false
+      if (isConnectedRef.current) startListening()
     } catch (err) {
       console.error('[Demo] Error:', err)
       isProcessingRef.current = false
