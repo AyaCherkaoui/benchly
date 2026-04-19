@@ -65,8 +65,11 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
       setSessionId(existingSession.id); sessionIdRef.current = existingSession.id
       const completed: number[] = existingSession.completed_steps ?? []
       setCompletedSteps(completed)
-      const idx = stepsData.findIndex((s) => s.step_number === existingSession.current_step)
+      const idx = stepsData.findIndex((s: Step) => s.step_number === existingSession.current_step)
       setCurrentStepIndex(idx >= 0 ? idx : 0)
+      if (stepsData.length > 0 && stepsData.every((s: Step) => completed.includes(s.step_number))) {
+        setProtocolComplete(true)
+      }
     }
     setLoading(false)
   }, [params.id]) // eslint-disable-line react-hooks/exhaustive-deps
