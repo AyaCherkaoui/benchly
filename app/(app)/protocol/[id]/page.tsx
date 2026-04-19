@@ -418,13 +418,13 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
         )}
 
         {/* Log samples shortcut */}
-        <button
-          onClick={() => router.push('/samples')}
+        <a
+          href="/samples"
           className="flex items-center justify-center gap-2 rounded-xl py-3 text-xs transition-opacity hover:opacity-80"
-          style={{ border: '1px solid var(--border)', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}
+          style={{ border: '1px solid var(--border)', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', textDecoration: 'none' }}
         >
           <FlaskConical size={12} /> Log your samples
-        </button>
+        </a>
       </div>
     </div>
     </>
