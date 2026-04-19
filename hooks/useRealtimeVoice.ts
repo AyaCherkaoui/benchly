@@ -234,9 +234,12 @@ PROACTIVE BEHAVIOR:
 
       const audio = new Audio()
       audio.autoplay = true
+      audio.style.display = 'none'
+      document.body.appendChild(audio)
       audioRef.current = audio
       pc.ontrack = (e) => {
         audio.srcObject = e.streams[0]
+        audio.play().catch(err => console.error('[Realtime] Audio play error:', err))
         setVoiceState('speaking')
       }
 
@@ -514,7 +517,10 @@ PROACTIVE BEHAVIOR:
     pcRef.current?.close()
     pcRef.current = null
     dcRef.current = null
-    if (audioRef.current) audioRef.current.srcObject = null
+    if (audioRef.current) {
+      audioRef.current.srcObject = null
+      audioRef.current.remove()
+    }
     setIsConnected(false)
     setVoiceState('idle')
   }, [])
