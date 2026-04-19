@@ -226,6 +226,9 @@ PROACTIVE BEHAVIOR:
     try {
       setError(null)
 
+      // Get mic permission first so the ephemeral token (60s TTL) doesn't expire waiting on the prompt
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+
       const tokenRes = await fetch('/api/realtime-token')
       if (!tokenRes.ok) throw new Error('Failed to get realtime token')
       const { client_secret } = await tokenRes.json()
@@ -243,8 +246,6 @@ PROACTIVE BEHAVIOR:
         audio.srcObject = e.streams[0]
         audio.play().catch(err => console.error('[Realtime] Audio play error:', err))
       }
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       mediaStreamRef.current = stream
       stream.getTracks().forEach(track => pc.addTrack(track, stream))
 
@@ -426,10 +427,10 @@ PROACTIVE BEHAVIOR:
             setVoiceState('thinking')
             break
 
-          case 'response.audio.started':
+          case 'response.audio.delta':
             setVoiceState('speaking')
-            // Re-attach stream and play for each new AI response
-            if (audioRef.current && remoteStreamRef.current) {
+            // Resume playback if paused (e.g. after user interruption)
+            if (audioRef.current && audioRef.current.paused && remoteStreamRef.current) {
               audioRef.current.srcObject = remoteStreamRef.current
               audioRef.current.play().catch(err => console.error('[Realtime] Audio play error:', err))
             }
@@ -497,7 +498,7 @@ PROACTIVE BEHAVIOR:
       await pc.setLocalDescription(offer)
 
       const sdpRes = await fetch(
-        'https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17',
+        'https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview',
         {
           method: 'POST',
           body: offer.sdp,
