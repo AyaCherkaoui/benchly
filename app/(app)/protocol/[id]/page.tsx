@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle, CheckCircle, ChevronRight, Circle, FlaskConical, List, X } from 'lucide-react'
@@ -345,20 +344,20 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
               </div>
             )}
             <div className="mt-4 flex gap-3">
-              <Link
+              <a
                 href="/samples"
                 className="flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition-opacity hover:opacity-80"
-                style={{ background: 'var(--accent)', color: '#0a0a0a', letterSpacing: '0.08em', textTransform: 'uppercase' }}
+                style={{ background: 'var(--accent)', color: '#0a0a0a', letterSpacing: '0.08em', textTransform: 'uppercase', textDecoration: 'none' }}
               >
                 <FlaskConical size={12} /> View Sample Tracker →
-              </Link>
-              <Link
+              </a>
+              <a
                 href="/protocol"
                 className="flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition-opacity hover:opacity-80"
-                style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}
+                style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', letterSpacing: '0.08em', textTransform: 'uppercase', textDecoration: 'none' }}
               >
                 Start New Experiment
-              </Link>
+              </a>
             </div>
           </div>
         )}
