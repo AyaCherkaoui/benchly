@@ -1,9 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { AlertTriangle, CheckCircle, ChevronRight, Circle, ArrowRight, FlaskConical, List, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle, ChevronRight, Circle, FlaskConical, List, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { speakText } from '@/lib/speak'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
@@ -161,8 +162,6 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
   const hasTimer = !!currentStep.timer_seconds
   const isLastStep = currentStepIndex === steps.length - 1
 
-  const warningLower = currentStep.warning?.toLowerCase() || ''
-  const showSampleLink = warningLower.includes('label') || warningLower.includes('sample id') || warningLower.includes('tube') || warningLower.includes('store')
 
   return (
     <>
@@ -321,20 +320,20 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
               {protocol.name} — all {steps.length} steps done. Your steps are still visible below for review.
             </p>
             <div className="mt-4 flex gap-3">
-              <button
-                onClick={() => router.push('/samples')}
+              <Link
+                href="/samples"
                 className="flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition-opacity hover:opacity-80"
                 style={{ background: 'var(--accent)', color: '#0a0a0a', letterSpacing: '0.08em', textTransform: 'uppercase' }}
               >
                 <FlaskConical size={12} /> View Sample Tracker →
-              </button>
-              <button
-                onClick={() => router.push('/protocol')}
+              </Link>
+              <Link
+                href="/protocol"
                 className="flex items-center gap-2 rounded-lg px-4 py-2 text-xs transition-opacity hover:opacity-80"
                 style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', letterSpacing: '0.08em', textTransform: 'uppercase' }}
               >
                 Start New Experiment
-              </button>
+              </Link>
             </div>
           </div>
         )}
@@ -366,24 +365,13 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
 
         {/* Warning */}
         {currentStep.warning && (
-          <>
-            <div
-              className="flex items-start gap-3 rounded-xl p-5"
-              style={{ background: 'rgba(251,191,36,0.04)', borderLeft: '2px solid rgba(251,191,36,0.4)' }}
-            >
-              <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" style={{ color: '#f59e0b' }} />
-              <p className="text-sm leading-relaxed" style={{ color: '#fcd34d' }}>{currentStep.warning}</p>
-            </div>
-            {showSampleLink && (
-              <button
-                onClick={() => router.push('/samples')}
-                className="flex items-center gap-2 self-start rounded-lg px-3 py-1.5 text-xs transition-opacity hover:opacity-80"
-                style={{ border: '1px solid var(--accent)', color: 'var(--accent)', letterSpacing: '0.06em' }}
-              >
-                Log your samples <ArrowRight size={11} />
-              </button>
-            )}
-          </>
+          <div
+            className="flex items-start gap-3 rounded-xl p-5"
+            style={{ background: 'rgba(251,191,36,0.04)', borderLeft: '2px solid rgba(251,191,36,0.4)' }}
+          >
+            <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" style={{ color: '#f59e0b' }} />
+            <p className="text-sm leading-relaxed" style={{ color: '#fcd34d' }}>{currentStep.warning}</p>
+          </div>
         )}
 
         {/* Timer */}
@@ -403,6 +391,15 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
             {!isLastStep && <ChevronRight size={14} />}
           </button>
         )}
+
+        {/* Log samples shortcut */}
+        <Link
+          href="/samples"
+          className="flex items-center justify-center gap-2 rounded-xl py-3 text-xs transition-opacity hover:opacity-80"
+          style={{ border: '1px solid var(--border)', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}
+        >
+          <FlaskConical size={12} /> Log your samples
+        </Link>
       </div>
     </div>
     </>
