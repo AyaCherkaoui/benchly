@@ -425,15 +425,15 @@ PROACTIVE BEHAVIOR:
 
           case 'response.created':
             setVoiceState('thinking')
+            // Re-attach and play for every new AI response
+            if (audioRef.current && remoteStreamRef.current) {
+              audioRef.current.srcObject = remoteStreamRef.current
+              audioRef.current.play().catch(err => console.error('[Realtime] Audio play error:', err))
+            }
             break
 
           case 'response.audio.delta':
             setVoiceState('speaking')
-            // Resume playback if paused (e.g. after user interruption)
-            if (audioRef.current && audioRef.current.paused && remoteStreamRef.current) {
-              audioRef.current.srcObject = remoteStreamRef.current
-              audioRef.current.play().catch(err => console.error('[Realtime] Audio play error:', err))
-            }
             break
 
           case 'conversation.item.input_audio_transcription.completed': {
