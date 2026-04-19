@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Menu, X } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
@@ -20,6 +20,10 @@ export default function Navbar() {
   const router = useRouter()
   const supabase = createSupabaseBrowserClient()
   const [menuOpen, setMenuOpen] = useState(false)
+
+  useEffect(() => {
+    NAV.forEach(({ href }) => router.prefetch(href))
+  }, [router])
 
   async function handleSignOut() {
     await supabase.auth.signOut()
