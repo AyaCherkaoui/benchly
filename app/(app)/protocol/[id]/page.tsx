@@ -26,6 +26,7 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
   const [loading, setLoading] = useState(true)
   const [firstName, setFirstName] = useState('')
   const [showStepsSheet, setShowStepsSheet] = useState(false)
+  const [nextTask, setNextTask] = useState<{ date: string; task_text: string } | null>(null)
 
   const sessionIdRef = useRef<string | null>(null)
   sessionIdRef.current = sessionId
@@ -125,6 +126,20 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
       setProtocolComplete(true)
       await saveSession(newCompleted, currentStep.step_number)
       toast.success('Protocol complete! Well done.')
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const today = new Date().toISOString().split('T')[0]
+        const { data: upcoming } = await supabase
+          .from('calendar_tasks')
+          .select('date, task_text')
+          .eq('user_id', user.id)
+          .eq('completed', false)
+          .gte('date', today)
+          .order('date', { ascending: true })
+          .limit(1)
+          .maybeSingle()
+        if (upcoming) setNextTask(upcoming)
+      }
     } else {
       const nextIndex = idx + 1
       setCurrentStepIndex(nextIndex)
@@ -315,8 +330,17 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
               Protocol complete — great work{firstName ? `, ${firstName}` : ''}.
             </p>
             <p className="mt-1 text-sm" style={{ color: 'var(--text-muted)' }}>
-              {protocol.name} — all {steps.length} steps done. Your steps are still visible below for review.
+              {protocol.name} — all {steps.length} steps done.
             </p>
+            {nextTask && (
+              <div className="mt-3 flex items-center gap-2 rounded-lg px-3 py-2 text-xs" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                <span style={{ color: 'var(--accent)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Next up</span>
+                <span>·</span>
+                <span>{new Date(nextTask.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                <span>·</span>
+                <span style={{ color: 'var(--text-primary)' }}>{nextTask.task_text}</span>
+              </div>
+            )}
             <div className="mt-4 flex gap-3">
               <Link
                 href="/samples"
