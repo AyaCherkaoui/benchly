@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Mic, Send, Volume2, VolumeX, X, MessageCircle } from 'lucide-react'
-import { speakText } from '@/lib/speak'
 import { useProtocolSession } from '@/contexts/ProtocolSessionContext'
 
 interface Message {
@@ -77,7 +76,6 @@ export default function AIChat() {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
     // Only speak if message was sent by voice and TTS is enabled
     if (byVoice && ttsEnabledRef.current) {
-      speakText(aiReply)
     }
   }
 

@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle, CheckCircle, ChevronRight, Circle, FlaskConical, List, X } from 'lucide-react'
 import { toast } from 'sonner'
-import { speakText, stopSpeaking } from '@/lib/speak'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import Timer, { TimerHandle } from '@/components/Timer'
 import { useProtocolSession } from '@/contexts/ProtocolSessionContext'
@@ -126,7 +125,6 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
       setProtocolComplete(true)
       await saveSession(newCompleted, currentStep.step_number)
       toast.success('Protocol complete! Well done.')
-      speakText(`Protocol complete. Great work${firstName ? ' ' + firstName : ''}. You can now log your samples or start a new experiment.`)
     } else {
       const nextIndex = idx + 1
       setCurrentStepIndex(nextIndex)
@@ -394,7 +392,7 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
 
         {/* Log samples shortcut */}
         <button
-          onClick={() => { stopSpeaking(); router.push('/samples') }}
+          onClick={() => router.push('/samples')}
           className="flex items-center justify-center gap-2 rounded-xl py-3 text-xs transition-opacity hover:opacity-80"
           style={{ border: '1px solid var(--border)', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}
         >

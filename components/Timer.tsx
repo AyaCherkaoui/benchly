@@ -3,7 +3,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
-import { speakText } from '@/lib/speak'
 
 export interface TimerHandle {
   start(): void
@@ -48,7 +47,6 @@ const Timer = forwardRef<TimerHandle, TimerProps>(function Timer({ seconds, onCo
         osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 1)
       } catch { /* ignore */ }
       toast.success('Timer complete! Check your sample.')
-      speakText('Timer complete. Check your sample and let me know when you are ready to continue.')
       onCompleteRef.current?.()
       return
     }
