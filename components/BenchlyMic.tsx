@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useRealtimeVoice } from '@/hooks/useRealtimeVoice'
+import { useDemoVoice as useRealtimeVoice } from '@/hooks/useDemoVoice'
 import { useProtocolSession } from '@/contexts/ProtocolSessionContext'
 import { usePathname } from 'next/navigation'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
