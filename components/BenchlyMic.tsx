@@ -17,7 +17,7 @@ export default function BenchlyMic() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return
-      supabase.from('profiles').select('full_name').eq('id', user.id).single().then(({ data }) => {
+      supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle().then(({ data }) => {
         const first = data?.full_name?.split(' ')[0]
           || (user.user_metadata?.full_name as string | undefined)?.split(' ')[0]
           || user.email?.split('@')[0]

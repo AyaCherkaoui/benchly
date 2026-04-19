@@ -46,7 +46,7 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
     const [{ data: protocolData }, { data: stepsData }, { data: profile }] = await Promise.all([
       supabase.from('protocols').select('*').eq('id', params.id).single(),
       supabase.from('steps').select('*').eq('protocol_id', params.id).order('step_number'),
-      supabase.from('profiles').select('full_name').eq('id', user.id).single(),
+      supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle(),
     ])
 
     if (!protocolData || !stepsData?.length) { setLoading(false); return }

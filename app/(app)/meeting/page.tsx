@@ -83,7 +83,7 @@ export default function MeetingPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const { data: profileData } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
+    const { data: profileData } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle()
     userRef.current = { id: user.id, name: profileData?.full_name?.split(' ')[0] ?? 'there' }
 
     const { data: sessionData } = await supabase.from('sessions').select('*').eq('user_id', user.id)

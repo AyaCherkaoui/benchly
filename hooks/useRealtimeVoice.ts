@@ -509,6 +509,11 @@ PROACTIVE BEHAVIOR:
         }
       )
 
+      if (!sdpRes.ok) {
+        const errBody = await sdpRes.text()
+        console.error('[Realtime] SDP exchange failed:', sdpRes.status, errBody)
+        throw new Error(`OpenAI SDP exchange failed (${sdpRes.status})`)
+      }
       const answer = { type: 'answer' as RTCSdpType, sdp: await sdpRes.text() }
       await pc.setRemoteDescription(answer)
 

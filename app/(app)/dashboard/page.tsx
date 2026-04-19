@@ -39,7 +39,7 @@ export default async function DashboardPage() {
 
   const [{ data: profile }, { data: allSessions }, { data: recentSamples }] =
     await Promise.all([
-      supabase.from('profiles').select('full_name, lab_name').eq('id', userId).single(),
+      supabase.from('profiles').select('full_name, lab_name').eq('id', userId).maybeSingle(),
       supabase.from('sessions').select('*').eq('user_id', userId).order('last_updated', { ascending: false }),
       supabase.from('samples').select('id, tube_label, location, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(5),
     ])
