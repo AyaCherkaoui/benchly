@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle, CheckCircle, ChevronRight, Circle, FlaskConical, List, X } from 'lucide-react'
 import { toast } from 'sonner'
-import { speakText } from '@/lib/speak'
+import { speakText, stopSpeaking } from '@/lib/speak'
 import { createSupabaseBrowserClient } from '@/lib/supabase'
 import Timer, { TimerHandle } from '@/components/Timer'
 import { useProtocolSession } from '@/contexts/ProtocolSessionContext'
@@ -393,14 +393,13 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
         )}
 
         {/* Log samples shortcut */}
-        <Link
-          href="/samples"
-          prefetch={true}
+        <button
+          onClick={() => { stopSpeaking(); router.push('/samples') }}
           className="flex items-center justify-center gap-2 rounded-xl py-3 text-xs transition-opacity hover:opacity-80"
           style={{ border: '1px solid var(--border)', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}
         >
           <FlaskConical size={12} /> Log your samples
-        </Link>
+        </button>
       </div>
     </div>
     </>
