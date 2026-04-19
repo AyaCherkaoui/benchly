@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion'
 import { Toaster } from 'sonner'
 import Navbar from '@/components/Navbar'
+import BenchlyMic from '@/components/BenchlyMic'
 import { ProtocolSessionProvider } from '@/contexts/ProtocolSessionContext'
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -20,6 +21,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           {children}
         </motion.main>
       </div>
+      <BenchlyMic />
       <Toaster
         theme="dark"
         position="bottom-left"

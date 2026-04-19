@@ -1,4 +1,5 @@
 'use client'
+import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRealtimeVoice } from '@/hooks/useRealtimeVoice'
 import { useProtocolSession } from '@/contexts/ProtocolSessionContext'
@@ -7,12 +8,11 @@ import { usePathname } from 'next/navigation'
 export default function BenchlyMic() {
   const pathname = usePathname()
   const { currentStepTitle, protocolName, protocolId, onNextStep, onMarkComplete, onStartTimer, onPauseTimer } = useProtocolSession()
+  const [hovered, setHovered] = useState(false)
 
   const {
     voiceState,
     isConnected,
-    transcript,
-    error,
     connect,
     disconnect,
   } = useRealtimeVoice({
@@ -27,164 +27,172 @@ export default function BenchlyMic() {
   })
 
   const handleToggle = () => {
-    if (isConnected) {
-      disconnect()
-    } else {
-      connect()
-    }
+    if (isConnected) disconnect()
+    else connect()
   }
 
+  const dotColor =
+    !isConnected ? '#444' :
+    voiceState === 'listening' ? '#1D9E75' :
+    voiceState === 'speaking' ? '#e8a598' :
+    voiceState === 'thinking' ? '#f59e0b' :
+    '#444'
 
-  const colors = {
-    idle: '#333333',
-    listening: '#1D9E75',
-    thinking: '#e8a598',
-    speaking: '#e8a598',
-  }
-
-  const labels = {
-    idle: "TAP TO ACTIVATE",
-    listening: "LISTENING...",
-    thinking: "THINKING...",
-    speaking: "SPEAKING...",
-  }
+  const dotPulse = voiceState === 'speaking' && isConnected
 
   return (
-    <div style={{
-      position: 'fixed',
-      bottom: 'calc(32px + env(safe-area-inset-bottom))',
-      left: '50%',
-      transform: 'translateX(-50%)',
-      zIndex: 50,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: 8,
-    }}>
-      {/* Transcript pill */}
+    <div
+      style={{
+        position: 'fixed',
+        top: 72,
+        right: 20,
+        zIndex: 50,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 6,
+      }}
+    >
+      {/* Tooltip */}
       <AnimatePresence>
-        {transcript && (
+        {hovered && (
           <motion.div
-            initial={{ opacity: 0, y: 8 }}
+            initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.15 }}
             style={{
+              position: 'absolute',
+              top: 64,
               background: '#111',
               border: '1px solid rgba(255,255,255,0.08)',
               borderRadius: 20,
-              padding: '6px 14px',
-              fontSize: 12,
+              padding: '4px 10px',
+              fontSize: 10,
+              letterSpacing: '0.1em',
               color: '#888',
-              maxWidth: 280,
-              textAlign: 'center',
               whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
+              textTransform: 'uppercase',
+              pointerEvents: 'none',
             }}
           >
-            {transcript}
+            Talk to Benchly
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Rings for speaking state */}
-      <div style={{ position: 'relative', width: 80, height: 80 }}>
-        {voiceState === 'speaking' && [0, 1, 2].map(i => (
+      {/* Button + waves container */}
+      <div style={{ position: 'relative', width: 56, height: 56 }}>
+
+        {/* Speaking rings */}
+        {voiceState === 'speaking' && isConnected && [0, 1].map(i => (
           <motion.div
             key={i}
-            animate={{ scale: [1, 2.5], opacity: [0.3, 0] }}
-            transition={{ duration: 1.5, repeat: Infinity, delay: i * 0.4, ease: 'easeOut' as const }}
+            animate={{ scale: [1, 2.2], opacity: [0.25, 0] }}
+            transition={{ duration: 1.4, repeat: Infinity, delay: i * 0.5, ease: 'easeOut' as const }}
             style={{
               position: 'absolute',
               inset: 0,
               borderRadius: '50%',
               border: '1px solid #e8a598',
+              pointerEvents: 'none',
             }}
           />
         ))}
 
+        {/* Mic wave SVG — left and right arcs */}
+        <svg
+          width="80"
+          height="56"
+          style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', pointerEvents: 'none' }}
+          viewBox="-40 -28 80 56"
+        >
+          <motion.path
+            d="M -32 -10 Q -40 0 -32 10"
+            stroke="#e8a598"
+            strokeWidth="1.5"
+            fill="none"
+            strokeLinecap="round"
+            animate={{ opacity: isConnected ? [0.2, 0.8, 0.2] : 0.15 }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+          />
+          <motion.path
+            d="M 32 -10 Q 40 0 32 10"
+            stroke="#e8a598"
+            strokeWidth="1.5"
+            fill="none"
+            strokeLinecap="round"
+            animate={{ opacity: isConnected ? [0.2, 0.8, 0.2] : 0.15 }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut', delay: 0.3 }}
+          />
+        </svg>
+
         {/* Main button */}
         <motion.button
           onClick={handleToggle}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={() => setHovered(false)}
           animate={{
-            scale: voiceState === 'idle' ? [0.97, 1.03, 0.97] :
-                   voiceState === 'listening' ? [0.95, 1.08, 0.95] : 1,
-            borderColor: isConnected ? colors[voiceState] : '#333',
+            borderColor: isConnected
+              ? voiceState === 'listening' ? '#1D9E75'
+              : voiceState === 'speaking' ? '#e8a598'
+              : voiceState === 'thinking' ? '#f59e0b'
+              : '#333'
+              : '#333',
+            scale: voiceState === 'listening' && isConnected ? [0.96, 1.04, 0.96] : 1,
           }}
           transition={{
-            scale: {
-              duration: voiceState === 'listening' ? 0.8 : 3,
-              repeat: Infinity,
-              ease: 'easeInOut',
-            },
-            borderColor: { duration: 0.3 }
+            borderColor: { duration: 0.3 },
+            scale: { duration: 0.9, repeat: Infinity, ease: 'easeInOut' },
           }}
           style={{
-            width: 80,
-            height: 80,
+            width: 56,
+            height: 56,
             borderRadius: '50%',
             background: '#0d0d0d',
-            border: `1.5px solid ${isConnected ? colors[voiceState] : '#333'}`,
+            border: '1.5px solid #333',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: isConnected && voiceState === 'listening'
-              ? '0 0 20px rgba(29,158,117,0.2)'
-              : voiceState === 'speaking'
-              ? '0 0 20px rgba(232,165,152,0.2)'
-              : 'none',
             position: 'relative',
             zIndex: 1,
+            overflow: 'hidden',
+            padding: 0,
+            boxShadow: isConnected && voiceState === 'listening'
+              ? '0 0 16px rgba(29,158,117,0.2)'
+              : isConnected && voiceState === 'speaking'
+              ? '0 0 16px rgba(232,165,152,0.2)'
+              : 'none',
           }}
         >
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-            <rect x="9" y="2" width="6" height="12" rx="3"
-              fill={isConnected ? colors[voiceState] : '#555'} />
-            <path d="M5 10a7 7 0 0 0 14 0"
-              stroke={isConnected ? colors[voiceState] : '#555'}
-              strokeWidth="2" strokeLinecap="round" />
-            <line x1="12" y1="19" x2="12" y2="22"
-              stroke={isConnected ? colors[voiceState] : '#555'}
-              strokeWidth="2" strokeLinecap="round" />
-            <line x1="8" y1="22" x2="16" y2="22"
-              stroke={isConnected ? colors[voiceState] : '#555'}
-              strokeWidth="2" strokeLinecap="round" />
-          </svg>
+          {/* Mouse logo */}
+          <img
+            src="/benchly-logo.svg"
+            alt="Benchly"
+            width={38}
+            height={38}
+            style={{ objectFit: 'contain', display: 'block' }}
+          />
         </motion.button>
+
+        {/* Status dot */}
+        <motion.div
+          animate={dotPulse ? { scale: [1, 1.4, 1], opacity: [1, 0.6, 1] } : { scale: 1, opacity: 1 }}
+          transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut' }}
+          style={{
+            position: 'absolute',
+            bottom: 2,
+            right: 2,
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: dotColor,
+            border: '1.5px solid #0d0d0d',
+            zIndex: 2,
+          }}
+        />
       </div>
-
-      {/* Label */}
-      <motion.span
-        animate={{ opacity: 1 }}
-        style={{
-          fontSize: 10,
-          letterSpacing: '0.12em',
-          color: isConnected ? colors[voiceState] : '#444',
-          fontFamily: 'Inter, sans-serif',
-          fontWeight: 500,
-          userSelect: 'none',
-        }}
-      >
-        {isConnected ? labels[voiceState] : "SAY 'HEY BENCHLY'"}
-      </motion.span>
-
-      {/* Error display */}
-      {error && (
-        <div style={{
-          position: 'absolute',
-          bottom: 100,
-          background: '#2a1111',
-          border: '1px solid #f87171',
-          borderRadius: 8,
-          padding: '6px 12px',
-          fontSize: 11,
-          color: '#f87171',
-          whiteSpace: 'nowrap',
-        }}>
-          {error}
-        </div>
-      )}
     </div>
   )
 }
