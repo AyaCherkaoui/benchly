@@ -224,7 +224,6 @@ export default function BenchlyMic() {
           padding: '6px 10px',
           fontSize: 11,
           color: '#f87171',
-          whiteSpace: 'nowrap',
           maxWidth: 220,
           whiteSpace: 'pre-wrap' as const,
         }}>
