@@ -40,6 +40,7 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions = {}) {
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const dcRef = useRef<RTCDataChannel | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const remoteStreamRef = useRef<MediaStream | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const router = useRouter()
   const supabase = createSupabaseBrowserClient()
@@ -238,9 +239,9 @@ PROACTIVE BEHAVIOR:
       document.body.appendChild(audio)
       audioRef.current = audio
       pc.ontrack = (e) => {
+        remoteStreamRef.current = e.streams[0]
         audio.srcObject = e.streams[0]
         audio.play().catch(err => console.error('[Realtime] Audio play error:', err))
-        setVoiceState('speaking')
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -417,7 +418,8 @@ PROACTIVE BEHAVIOR:
         switch (event.type) {
           case 'input_audio_buffer.speech_started':
             setVoiceState('listening')
-            if (audioRef.current) audioRef.current.srcObject = null
+            // Pause current AI audio on interruption but keep the stream
+            if (audioRef.current) audioRef.current.pause()
             break
 
           case 'response.created':
@@ -426,6 +428,11 @@ PROACTIVE BEHAVIOR:
 
           case 'response.audio.started':
             setVoiceState('speaking')
+            // Re-attach stream and play for each new AI response
+            if (audioRef.current && remoteStreamRef.current) {
+              audioRef.current.srcObject = remoteStreamRef.current
+              audioRef.current.play().catch(err => console.error('[Realtime] Audio play error:', err))
+            }
             break
 
           case 'conversation.item.input_audio_transcription.completed': {
@@ -518,9 +525,11 @@ PROACTIVE BEHAVIOR:
     pcRef.current = null
     dcRef.current = null
     if (audioRef.current) {
+      audioRef.current.pause()
       audioRef.current.srcObject = null
       audioRef.current.remove()
     }
+    remoteStreamRef.current = null
     setIsConnected(false)
     setVoiceState('idle')
   }, [])
