@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AlertTriangle, CheckCircle, ChevronRight, Circle, FlaskConical, List, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -12,6 +12,8 @@ import { Protocol, Step } from '@/types'
 
 export default function ProtocolWalkerPage({ params }: { params: { id: string } }) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const sidParam = searchParams.get('sid')
   const supabase = createSupabaseBrowserClient()
   const { setSessionState, setCallbacks, clearSession, notifyTimerComplete } = useProtocolSession()
 
@@ -37,7 +39,7 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
   completedStepsRef.current = completedSteps
   const timerRef = useRef<TimerHandle>(null)
 
-  const loadProtocol = useCallback(async () => {
+  const loadProtocol = useCallback(async () => { // eslint-disable-line react-hooks/exhaustive-deps
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/login'); return }
 
@@ -56,9 +58,10 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
       || ''
     setFirstName(name)
 
-    const { data: existingSession } = await supabase
-      .from('sessions').select('*').eq('user_id', user.id).eq('protocol_id', params.id)
-      .order('last_updated', { ascending: false }).limit(1).maybeSingle()
+    const { data: existingSession } = sidParam
+      ? await supabase.from('sessions').select('*').eq('id', sidParam).eq('user_id', user.id).maybeSingle()
+      : await supabase.from('sessions').select('*').eq('user_id', user.id).eq('protocol_id', params.id)
+          .order('last_updated', { ascending: false }).limit(1).maybeSingle()
 
     if (existingSession) {
       setSessionId(existingSession.id); sessionIdRef.current = existingSession.id
@@ -71,7 +74,7 @@ export default function ProtocolWalkerPage({ params }: { params: { id: string } 
       }
     }
     setLoading(false)
-  }, [params.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [params.id, sidParam]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { loadProtocol() }, [loadProtocol])
 

@@ -96,8 +96,7 @@ export default function ProtocolsPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      // Create session with experiment metadata
-      await supabase.from('sessions').insert({
+      const { data: newSession } = await supabase.from('sessions').insert({
         user_id: user.id,
         protocol_id: selectedProtocol.id,
         current_step: 1,
@@ -106,9 +105,11 @@ export default function ProtocolsPage() {
         last_updated: new Date().toISOString(),
         experiment_number: expNumber.trim() || null,
         project_name: projectName.trim() || null,
-      })
-    } catch { /* silently continue */ }
-    router.push(`/protocol/${selectedProtocol.id}`)
+      }).select('id').single()
+      router.push(`/protocol/${selectedProtocol.id}${newSession?.id ? `?sid=${newSession.id}` : ''}`)
+    } catch {
+      router.push(`/protocol/${selectedProtocol.id}`)
+    }
   }
 
   if (loading) {
