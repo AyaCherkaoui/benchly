@@ -6,21 +6,24 @@ import { createSupabaseBrowserClient } from '@/lib/supabase'
 export type VoiceState = 'idle' | 'listening' | 'thinking' | 'speaking'
 
 export type BenchlyFunction =
-  | { name: 'navigate'; arguments: { path: string } }
-  | { name: 'mark_step_complete'; arguments: {} }
-  | { name: 'next_step'; arguments: {} }
-  | { name: 'start_timer'; arguments: {} }
-  | { name: 'pause_timer'; arguments: {} }
-  | { name: 'log_sample'; arguments: { tube_label: string; location: string; project_name?: string; notes?: string } }
-  | { name: 'add_task'; arguments: { task_text: string; date?: string } }
-  | { name: 'sign_out'; arguments: {} }
-  | { name: 'generate_report'; arguments: {} }
+  | { name: 'navigate'; arguments: { destination: string } }
+  | { name: 'mark_step_complete'; arguments: Record<string, never> }
+  | { name: 'next_step'; arguments: Record<string, never> }
+  | { name: 'start_timer'; arguments: Record<string, never> }
+  | { name: 'pause_timer'; arguments: Record<string, never> }
+  | { name: 'log_sample'; arguments: { tube_label: string; location: string; project_name?: string; experiment_number?: string; notes?: string } }
+  | { name: 'add_task'; arguments: { task_text: string; date: string } }
+  | { name: 'sign_out'; arguments: Record<string, never> }
+  | { name: 'generate_report'; arguments: Record<string, never> }
+  | { name: 'read_current_step'; arguments: Record<string, never> }
+  | { name: 'show_samples'; arguments: Record<string, never> }
 
 interface UseRealtimeVoiceOptions {
   currentPage?: string
   currentStep?: string
   protocolName?: string
   protocolId?: string
+  userName?: string
   onMarkComplete?: () => void
   onNextStep?: () => void
   onStartTimer?: () => void
@@ -42,40 +45,92 @@ export function useRealtimeVoice(options: UseRealtimeVoiceOptions = {}) {
   const supabase = createSupabaseBrowserClient()
 
   const getSystemPrompt = useCallback(() => {
-    const page = options.currentPage || 'dashboard'
-    const step = options.currentStep || ''
-    const protocol = options.protocolName || ''
+    const now = new Date()
+    const timeOfDay = now.getHours() < 12 ? 'morning' : now.getHours() < 17 ? 'afternoon' : 'evening'
+    const dayName = now.toLocaleDateString('en-US', { weekday: 'long' })
+    const dateStr = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 
-    return `You are Benchly, an intelligent AI lab assistant embedded in a laboratory workflow app. You help lab interns and researchers work hands-free while they conduct experiments.
+    return `You are Benchly, an AI lab assistant living inside a laboratory workflow web app. You are the user's hands-free companion while they work at the bench with gloves on.
 
-Current context:
-- Page: ${page}
-- Protocol: ${protocol || 'none active'}
-- Current step: ${step || 'none'}
+TODAY: ${dayName}, ${dateStr}, ${timeOfDay}
+CURRENT PAGE: ${options.currentPage || 'dashboard'}
+ACTIVE PROTOCOL: ${options.protocolName || 'none'}
+CURRENT STEP: ${options.currentStep || 'none'}
+USER: ${options.userName || 'the researcher'}
 
-Your personality:
-- Warm, encouraging, and professional
-- Concise — keep responses under 2 sentences unless explaining something complex
-- Smart — understand what the user means even if they phrase it awkwardly
-- Proactive — if you know what page they're on, reference it naturally
+YOUR PERSONALITY:
+- You are warm, focused, and efficient — like a brilliant lab partner who's always one step ahead
+- You speak in short, natural sentences. Never robotic. Never formal.
+- You confirm actions immediately and briefly: "Done." "Got it." "Moving there now."
+- You anticipate what the user needs based on context
+- You are encouraging without being annoying
+- When you don't understand something, you ask ONE short clarifying question
+- You never say "I cannot" or "I don't have access to" — you either do it or ask for clarification
 
-What you can do:
-- Navigate to any page in the app (dashboard, protocols, samples, daily log, lab meeting, team)
-- Mark the current protocol step as complete
-- Advance to the next step
-- Start or pause the step timer
-- Log a sample with tube label and location
-- Add a task to the calendar
-- Sign the user out
-- Generate the weekly report
+YOUR CAPABILITIES (what you can actually do):
+1. Navigate anywhere in the app — dashboard, protocols, samples, calendar, lab meeting/summary, team
+2. Mark the current protocol step as complete
+3. Move to the next or previous step
+4. Start, pause, or reset the step timer
+5. Log a sample — tube label, location, project, notes
+6. Add a task to any day on the calendar
+7. Sign the user out
+8. Go to the weekly report / generate a report
 
-Rules:
-- Never use emojis or special characters
-- Write in plain conversational prose
-- When you call a function, briefly confirm what you did: "Got it, moving to the next step." or "Logged your sample in the minus 20 freezer."
-- If you don't understand something, ask one clarifying question
-- Always call the appropriate function when the user requests an action — don't just describe what you would do, actually call it`
-  }, [options.currentPage, options.currentStep, options.protocolName])
+UNDERSTANDING NATURAL LANGUAGE (examples of what users might say and what they mean):
+
+Navigation:
+- "take me home" / "go back" / "main page" / "home screen" → dashboard
+- "show me my experiments" / "what protocols do I have" / "lab work" → protocols page
+- "my tubes" / "what samples do I have" / "storage" → samples page
+- "what's on my calendar" / "my tasks" / "schedule" / "this week" → calendar
+- "meeting prep" / "weekly summary" / "report" / "what did I do this week" → meeting
+- "my team" / "who's in the lab" → team page
+
+Protocol actions:
+- "I'm done" / "finished" / "next one" / "move on" / "that's done" / "check" → mark complete
+- "how long" / "start the clock" / "begin timing" / "go" / "I'm ready" → start timer
+- "hold on" / "wait" / "stop the clock" / "pause" → pause timer
+- "what step am I on" / "where am I" → describe current step
+
+Sample logging:
+- "save this" / "log it" / "remember this tube" / "B3 goes in the freezer" → log sample
+- Extract tube label from anything that sounds like a label (letters + numbers)
+- Extract location: "freezer" = -20°C Freezer, "cold" / "fridge" = 4°C Fridge, "room temp" = Room Temperature, "machine" / "PCR" = PCR Machine
+
+Task adding:
+- "remind me to..." / "add to my list" / "I need to do..." / "tomorrow I have to..." → add task
+- "next Monday" / "this Friday" / "tomorrow" → extract the date correctly
+
+CONTEXT AWARENESS:
+- If the user is on the protocol page and says "I'm done", they mean the current step, not the whole protocol
+- If they say "go back", they mean the previous page in the app, not the previous protocol step
+- If they mention a number like "step 3" while on the protocol page, they want to jump to step 3
+- If they say "how much time left" while a timer is running, describe the timer state
+- If they haven't started a protocol and say "let's start", ask which protocol they want to do
+- If they sound frustrated or confused, offer to help more specifically
+
+MEMORY WITHIN SESSION:
+- Remember everything said in this conversation
+- If they mentioned a project name earlier, use it when logging samples later
+- If they said they're working on "the CRISPR experiment", refer to it as that
+- Track what steps they've completed in this conversation
+
+RESPONSE RULES:
+- Maximum 2 sentences for confirmations
+- Maximum 4 sentences for explanations
+- Never use emojis, bullet points, asterisks, or markdown
+- Never repeat the user's exact words back to them
+- Never start with "Of course!" or "Certainly!" or "Great question!"
+- Start responses directly: "Moving there now." / "Timer started." / "Your sample is logged."
+- When executing a function, speak the confirmation naturally as if you already did it
+
+PROACTIVE BEHAVIOR:
+- If it's the start of a session and there's an active protocol, offer to resume it
+- If a timed step finishes, remind them proactively
+- If they've been on the same step for a long time, ask if they need help
+- If they log a sample, offer to add a note about what it's for`
+  }, [options.currentPage, options.currentStep, options.protocolName, options.userName])
 
   const transcriptRef = useRef('')
 
@@ -88,23 +143,16 @@ Rules:
 
     switch (name) {
       case 'navigate': {
-        const path = args.path as string
-        const pathMap: Record<string, string> = {
+        const destination = (args.destination as string || '').toLowerCase()
+        const routeMap: Record<string, string> = {
           'dashboard': '/dashboard',
-          'home': '/dashboard',
           'protocols': '/protocol',
-          'protocol': '/protocol',
           'samples': '/samples',
-          'daily log': '/log',
           'calendar': '/log',
-          'log': '/log',
-          'lab meeting': '/meeting',
           'meeting': '/meeting',
-          'report': '/meeting',
           'team': '/team',
         }
-        const normalized = path.toLowerCase()
-        const route = pathMap[normalized] || path
+        const route = routeMap[destination] || '/dashboard'
         router.push(route)
         break
       }
@@ -122,7 +170,7 @@ Rules:
         break
       case 'log_sample': {
         if (userId) {
-          const { error } = await supabase.from('samples').insert({
+          const { error: insertError } = await supabase.from('samples').insert({
             user_id: userId,
             sample_id_label: `SMPL-${Date.now()}`,
             tube_label: (args.tube_label as string) || 'Unknown',
@@ -130,19 +178,19 @@ Rules:
             project_name: (args.project_name as string) || null,
             notes: (args.notes as string) || null,
           })
-          if (error) console.error('Sample log error:', error)
+          if (insertError) console.error('Sample log error:', insertError)
         }
         break
       }
       case 'add_task': {
         if (userId) {
           const date = (args.date as string) || new Date().toISOString().split('T')[0]
-          const { error } = await supabase.from('calendar_tasks').insert({
+          const { error: insertError } = await supabase.from('calendar_tasks').insert({
             user_id: userId,
             date,
             task_text: args.task_text as string,
           })
-          if (error) console.error('Task add error:', error)
+          if (insertError) console.error('Task add error:', insertError)
         }
         break
       }
@@ -153,9 +201,15 @@ Rules:
       case 'generate_report':
         router.push('/meeting')
         break
+      case 'read_current_step':
+        // AI's spoken response handles this naturally via system prompt context
+        break
+      case 'show_samples':
+        router.push('/samples')
+        break
     }
 
-    // Log to voice_logs
+    // Log command to voice_logs
     if (userId) {
       await supabase.from('voice_logs').insert({
         user_id: userId,
@@ -171,16 +225,13 @@ Rules:
     try {
       setError(null)
 
-      // Get ephemeral token from our server
       const tokenRes = await fetch('/api/realtime-token')
       if (!tokenRes.ok) throw new Error('Failed to get realtime token')
       const { client_secret } = await tokenRes.json()
 
-      // Create peer connection
       const pc = new RTCPeerConnection()
       pcRef.current = pc
 
-      // Set up audio output
       const audio = new Audio()
       audio.autoplay = true
       audioRef.current = audio
@@ -189,12 +240,10 @@ Rules:
         setVoiceState('speaking')
       }
 
-      // Add microphone input
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       mediaStreamRef.current = stream
       stream.getTracks().forEach(track => pc.addTrack(track, stream))
 
-      // Set up data channel for events
       const dc = pc.createDataChannel('oai-events')
       dcRef.current = dc
 
@@ -202,115 +251,170 @@ Rules:
         setIsConnected(true)
         setVoiceState('listening')
 
-        // Configure the session
         dc.send(JSON.stringify({
           type: 'session.update',
           session: {
             modalities: ['text', 'audio'],
             instructions: getSystemPrompt(),
-            voice: 'nova',
+            voice: 'shimmer',
             input_audio_format: 'pcm16',
             output_audio_format: 'pcm16',
             input_audio_transcription: { model: 'whisper-1' },
             turn_detection: {
               type: 'server_vad',
-              threshold: 0.5,
-              prefix_padding_ms: 300,
-              silence_duration_ms: 500,
+              threshold: 0.4,
+              prefix_padding_ms: 200,
+              silence_duration_ms: 400,
             },
             tools: [
               {
                 type: 'function',
                 name: 'navigate',
-                description: 'Navigate to a different page in the app',
+                description: 'Navigate to a different page. Use when user wants to go somewhere, see something, or switch sections.',
                 parameters: {
                   type: 'object',
                   properties: {
-                    path: { type: 'string', description: 'The page name: dashboard, protocols, samples, daily log, lab meeting, team' }
+                    destination: {
+                      type: 'string',
+                      enum: ['dashboard', 'protocols', 'samples', 'calendar', 'meeting', 'team'],
+                      description: 'Where to go',
+                    },
                   },
-                  required: ['path']
-                }
+                  required: ['destination'],
+                },
               },
               {
                 type: 'function',
                 name: 'mark_step_complete',
-                description: 'Mark the current protocol step as complete and advance to the next step',
-                parameters: { type: 'object', properties: {} }
+                description: 'Mark the current protocol step as complete. Use when user says they are done, finished, or ready to move on.',
+                parameters: { type: 'object', properties: {} },
               },
               {
                 type: 'function',
                 name: 'next_step',
-                description: 'Move to the next step in the protocol',
-                parameters: { type: 'object', properties: {} }
+                description: 'Advance to the next protocol step without marking current as complete.',
+                parameters: { type: 'object', properties: {} },
               },
               {
                 type: 'function',
                 name: 'start_timer',
-                description: 'Start the timer for the current step',
-                parameters: { type: 'object', properties: {} }
+                description: 'Start the countdown timer for the current step. Use when user says ready, start, go, begin, or asks to start timing.',
+                parameters: { type: 'object', properties: {} },
               },
               {
                 type: 'function',
                 name: 'pause_timer',
-                description: 'Pause the current step timer',
-                parameters: { type: 'object', properties: {} }
+                description: 'Pause the current step timer.',
+                parameters: { type: 'object', properties: {} },
               },
               {
                 type: 'function',
                 name: 'log_sample',
-                description: 'Log a sample to the sample tracker',
+                description: 'Save a sample to the sample tracker. Extract tube label and location from natural speech.',
                 parameters: {
                   type: 'object',
                   properties: {
-                    tube_label: { type: 'string', description: 'The tube or sample label' },
-                    location: { type: 'string', description: 'Where the sample is stored, e.g. minus 20 freezer, 4C fridge, PCR machine' },
-                    project_name: { type: 'string', description: 'The project this sample belongs to' },
-                    notes: { type: 'string', description: 'Any notes about the sample' }
+                    tube_label: {
+                      type: 'string',
+                      description: 'The tube or sample identifier, e.g. B3, Sample-1, PCR-tube-A',
+                    },
+                    location: {
+                      type: 'string',
+                      enum: ['-20°C Freezer', '-80°C Freezer', '4°C Fridge', 'Room Temperature', 'Incubator', 'PCR Machine', 'Other'],
+                      description: 'Where the sample is stored',
+                    },
+                    project_name: {
+                      type: 'string',
+                      description: 'Project this sample belongs to',
+                    },
+                    experiment_number: {
+                      type: 'string',
+                      description: 'Experiment number like PCR-003',
+                    },
+                    notes: {
+                      type: 'string',
+                      description: 'Any observations or notes about this sample',
+                    },
                   },
-                  required: ['tube_label', 'location']
-                }
+                  required: ['tube_label', 'location'],
+                },
               },
               {
                 type: 'function',
                 name: 'add_task',
-                description: 'Add a task to the calendar',
+                description: 'Add a task or reminder to the calendar. Use when user says remind me, I need to, add to my list, or mentions something they need to do.',
                 parameters: {
                   type: 'object',
                   properties: {
-                    task_text: { type: 'string', description: 'The task description' },
-                    date: { type: 'string', description: 'The date in YYYY-MM-DD format, defaults to today' }
+                    task_text: {
+                      type: 'string',
+                      description: 'What the task is',
+                    },
+                    date: {
+                      type: 'string',
+                      description: 'Date in YYYY-MM-DD format. Default to today if not specified.',
+                    },
                   },
-                  required: ['task_text']
-                }
+                  required: ['task_text', 'date'],
+                },
               },
               {
                 type: 'function',
                 name: 'sign_out',
-                description: 'Sign the user out of Benchly',
-                parameters: { type: 'object', properties: {} }
+                description: 'Sign the user out of Benchly.',
+                parameters: { type: 'object', properties: {} },
               },
               {
                 type: 'function',
                 name: 'generate_report',
-                description: 'Navigate to the lab meeting page to generate the weekly report',
-                parameters: { type: 'object', properties: {} }
-              }
+                description: 'Go to the lab meeting page to generate or view the weekly report.',
+                parameters: { type: 'object', properties: {} },
+              },
+              {
+                type: 'function',
+                name: 'read_current_step',
+                description: 'Read out the current protocol step instructions to the user.',
+                parameters: { type: 'object', properties: {} },
+              },
+              {
+                type: 'function',
+                name: 'show_samples',
+                description: 'Read out the user recent samples or go to samples page.',
+                parameters: { type: 'object', properties: {} },
+              },
             ],
             tool_choice: 'auto',
-          }
+          },
         }))
+
+        // Contextual greeting after session is configured
+        setTimeout(() => {
+          if (dc.readyState === 'open') {
+            dc.send(JSON.stringify({
+              type: 'conversation.item.create',
+              item: {
+                type: 'message',
+                role: 'user',
+                content: [{
+                  type: 'input_text',
+                  text: '[SYSTEM: The user just activated you. Greet them briefly and naturally based on the time of day and current context. If they have an active protocol, mention it. Keep it to one sentence. Be warm but not over the top.]',
+                }],
+              },
+            }))
+            dc.send(JSON.stringify({ type: 'response.create' }))
+          }
+        }, 800)
       }
 
       dc.onmessage = async (e) => {
         const event = JSON.parse(e.data)
+        const { data: { session } } = await supabase.auth.getSession()
+        const userId = session?.user?.id
 
         switch (event.type) {
           case 'input_audio_buffer.speech_started':
             setVoiceState('listening')
-            // Stop current audio if speaking (interruption)
-            if (audioRef.current) {
-              audioRef.current.srcObject = null
-            }
+            if (audioRef.current) audioRef.current.srcObject = null
             break
 
           case 'response.created':
@@ -321,23 +425,46 @@ Rules:
             setVoiceState('speaking')
             break
 
-          case 'conversation.item.input_audio_transcription.completed':
-            transcriptRef.current = event.transcript || ''
-            setTranscript(event.transcript || '')
+          case 'conversation.item.input_audio_transcription.completed': {
+            const userText = event.transcript || ''
+            transcriptRef.current = userText
+            setTranscript(userText)
+            // Save user's speech to voice_logs
+            if (userId && userText) {
+              await supabase.from('voice_logs').insert({
+                user_id: userId,
+                protocol_id: options.protocolId || null,
+                type: 'question',
+                transcript: userText,
+              })
+            }
             break
+          }
+
+          case 'response.audio_transcript.done': {
+            // Save Benchly's spoken response
+            if (userId && event.transcript) {
+              await supabase.from('voice_logs').insert({
+                user_id: userId,
+                protocol_id: options.protocolId || null,
+                type: 'response',
+                transcript: event.transcript,
+              })
+            }
+            break
+          }
 
           case 'response.function_call_arguments.done': {
             const args = JSON.parse(event.arguments || '{}')
             await handleFunctionCall(event.name, args)
-            // Send function result back
             if (dcRef.current?.readyState === 'open') {
               dcRef.current.send(JSON.stringify({
                 type: 'conversation.item.create',
                 item: {
                   type: 'function_call_output',
                   call_id: event.call_id,
-                  output: JSON.stringify({ success: true })
-                }
+                  output: JSON.stringify({ success: true }),
+                },
               }))
               dcRef.current.send(JSON.stringify({ type: 'response.create' }))
             }
@@ -356,7 +483,6 @@ Rules:
         }
       }
 
-      // Create and send SDP offer
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
 
@@ -380,7 +506,7 @@ Rules:
       setError(err instanceof Error ? err.message : 'Failed to connect')
       setVoiceState('idle')
     }
-  }, [getSystemPrompt, handleFunctionCall])
+  }, [getSystemPrompt, handleFunctionCall]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const disconnect = useCallback(() => {
     mediaStreamRef.current?.getTracks().forEach(t => t.stop())

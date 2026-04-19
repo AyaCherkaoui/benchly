@@ -1,14 +1,31 @@
 'use client'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRealtimeVoice } from '@/hooks/useRealtimeVoice'
 import { useProtocolSession } from '@/contexts/ProtocolSessionContext'
 import { usePathname } from 'next/navigation'
+import { createSupabaseBrowserClient } from '@/lib/supabase'
 
 export default function BenchlyMic() {
   const pathname = usePathname()
   const { currentStepTitle, protocolName, protocolId, onNextStep, onMarkComplete, onStartTimer, onPauseTimer } = useProtocolSession()
   const [hovered, setHovered] = useState(false)
+  const [userName, setUserName] = useState('')
+
+  const supabase = createSupabaseBrowserClient()
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      supabase.from('profiles').select('full_name').eq('id', user.id).single().then(({ data }) => {
+        const first = data?.full_name?.split(' ')[0]
+          || (user.user_metadata?.full_name as string | undefined)?.split(' ')[0]
+          || user.email?.split('@')[0]
+          || ''
+        setUserName(first)
+      })
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const {
     voiceState,
@@ -20,6 +37,7 @@ export default function BenchlyMic() {
     currentStep: currentStepTitle,
     protocolName,
     protocolId,
+    userName,
     onMarkComplete,
     onNextStep,
     onStartTimer,
@@ -166,7 +184,6 @@ export default function BenchlyMic() {
               : 'none',
           }}
         >
-          {/* Mouse logo */}
           <img
             src="/benchly-logo.svg"
             alt="Benchly"
